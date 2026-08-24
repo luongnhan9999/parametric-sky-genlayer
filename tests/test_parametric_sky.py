@@ -150,5 +150,45 @@ class TestParametricSkyExecutionSuite(unittest.TestCase):
         self.assertEqual(self.gl.transfers[1]["to"], self.underwriter)
         self.assertEqual(self.gl.transfers[1]["value"], 2500)
 
+    def test_03_role_permissions_separation(self):
+        """Verifies strict role boundaries for triggers, disputes, and finalizations."""
+        # 1. Underwriter attempts to trigger assessment -> should fail
+        self.gl.message.sender_address = self.underwriter
+        with self.assertRaises(MockUserError):
+            self.contract.trigger_claim_assessment(self.pid, "https://satellite.org/data.json")
+
+        # 2. Farmer triggers assessment -> should succeed
+        self.gl.message.sender_address = self.farmer
+        self.gl.nondet.web.render = lambda url, mode="text": "Severe drought"
+        self.gl.nondet.exec_prompt = lambda p, response_format="json": {"verdict": "FULL_PAYOUT", "confidence": 95, "reason": "Drought"}
+        self.contract.trigger_claim_assessment(self.pid, "https://satellite.org/data.json")
+        self.assertEqual(self.contract.policies[self.pid].status, "AWAITING_PAYOUT")
+
+        # 3. Farmer attempts to dispute payout verdict -> should fail (since payout favors farmer)
+        self.gl.message.sender_address = self.farmer
+        with self.assertRaises(MockUserError):
+            self.contract.raise_dispute(self.pid, "I want more money")
+
+        # 4. Underwriter disputes payout verdict -> should succeed
+        self.gl.message.sender_address = self.underwriter
+        self.contract.raise_dispute(self.pid, "Satellite sensor cloud noise")
+        self.assertEqual(self.contract.policies[self.pid].status, "DISPUTED")
+
+        # Reset policy status to AWAITING_PAYOUT to test finalization
+        p = self.contract.policies[self.pid]
+        p.status = "AWAITING_PAYOUT"
+        p.payout_ready_at = MockBigInt(0)
+        self.contract.policies[self.pid] = p
+
+        # 5. Underwriter attempts to finalize payout -> should fail (only farmer or admin can finalize payout)
+        self.gl.message.sender_address = self.underwriter
+        with self.assertRaises(MockUserError):
+            self.contract.finalize_settlement(self.pid)
+
+        # 6. Farmer finalizes payout -> should succeed
+        self.gl.message.sender_address = self.farmer
+        self.contract.finalize_settlement(self.pid)
+        self.assertEqual(self.contract.policies[self.pid].status, "CLOSED")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

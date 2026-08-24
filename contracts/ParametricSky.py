@@ -125,8 +125,8 @@ class Contract(gl.Contract):
         policy = self.policies[policy_id]
         caller = str(gl.message.sender_address).lower()
 
-        if caller != policy.insured and caller != policy.underwriter:
-            raise UserError("Unauthorized: Only insured policyholder or underwriter can trigger assessment")
+        if caller != policy.insured:
+            raise UserError("Unauthorized: Only the insured farmer can trigger assessment")
         if policy.status not in ["ACTIVE", "DISPUTED"]:
             raise UserError("Policy is not in an assessable status")
         if not telemetry_url.startswith("http"):
@@ -237,8 +237,15 @@ Respond ONLY with valid JSON:
             raise UserError("Policy is not in AWAITING_PAYOUT status")
 
         caller = str(gl.message.sender_address).lower()
-        if caller != policy.underwriter and caller != policy.insured:
-            raise UserError("Only underwriter or insured farmer can raise a dispute")
+        if policy.verdict in ["FULL_PAYOUT", "PARTIAL_PAYOUT"]:
+            if caller != policy.underwriter:
+                raise UserError("Only the underwriter can dispute a payout verdict")
+        elif policy.verdict == "NO_DISASTER":
+            if caller != policy.insured:
+                raise UserError("Only the insured farmer can dispute a dismissal verdict")
+        else:
+            if caller != policy.underwriter and caller != policy.insured:
+                raise UserError("Only policy participants can dispute")
 
         now = self._get_current_timestamp()
         if now > policy.payout_ready_at:
@@ -260,8 +267,15 @@ Respond ONLY with valid JSON:
             raise UserError("Policy is not awaiting payout or is currently disputed")
 
         caller = str(gl.message.sender_address).lower()
-        if caller != policy.underwriter and caller != policy.insured:
-            raise UserError("Unauthorized caller")
+        if policy.verdict in ["FULL_PAYOUT", "PARTIAL_PAYOUT"]:
+            if caller != policy.insured and caller != self.platform_admin:
+                raise UserError("Only the insured farmer or admin can finalize a payout")
+        elif policy.verdict == "NO_DISASTER":
+            if caller != policy.underwriter and caller != self.platform_admin:
+                raise UserError("Only the underwriter or admin can finalize a refund")
+        else:
+            if caller != policy.underwriter and caller != policy.insured and caller != self.platform_admin:
+                raise UserError("Unauthorized caller")
 
         now = self._get_current_timestamp()
         if now < policy.payout_ready_at:
