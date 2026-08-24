@@ -5,21 +5,19 @@ import {
   Activity, 
   Cpu, 
   CheckCircle, 
-  Clock, 
   Play, 
   RefreshCw, 
   Wallet,
-  Settings,
-  HelpCircle,
-  Sun,
-  Droplets,
   Globe,
   Home,
   LogOut,
   ChevronRight,
   Database,
   Users,
-  AlertCircle
+  AlertCircle,
+  HelpCircle,
+  Sun,
+  Droplets
 } from "lucide-react";
 
 // Types matching the Smart Contract structure
@@ -44,66 +42,13 @@ interface Policy {
   dispute_ratio?: string;
 }
 
-// Initial seed policies for Mock Simulator mode
-const INITIAL_MOCK_POLICIES: Policy[] = [
-  {
-    id: "policy_thanh_hoa_rice_01",
-    underwriter: "0xunderwriter_pool_alpha",
-    insured: "0xfarmer_cooperative_thanh_hoa",
-    coverage_amount: "5000",
-    status: "ACTIVE",
-    terms_url: "https://parametric.io/terms/drought_rice_2026.json",
-    telemetry_url: "",
-    geo_coordinates: "19.8067 N, 105.7851 E",
-    drought_index_trigger: "NDVI < 0.25 for 14 days OR Rainfall < 10mm",
-    verdict: "NONE",
-    reason: "Policy active. Monitoring satellite parameters.",
-    confidence: "0",
-    payout_ready_at: "0",
-    disputed_at: "0"
-  },
-  {
-    id: "policy_mekong_delta_durian_05",
-    underwriter: "0xunderwriter_pool_beta",
-    insured: "0xfarmer_mekong_delta",
-    coverage_amount: "8000",
-    status: "AWAITING_PAYOUT",
-    terms_url: "https://parametric.io/terms/durian_stress_2026.json",
-    telemetry_url: "https://satellite-feed.copernicus.eu/telemetry_0940_10530.json",
-    geo_coordinates: "9.4072 N, 105.3082 E",
-    drought_index_trigger: "NDVI < 0.22 for 10 days OR Temperature >= 38 C for 14 days",
-    verdict: "FULL_PAYOUT",
-    reason: "Severe vegetation collapse detected (NDVI = 0.17 for 15 consecutive days, temperature exceeded 38.5 C for 17 days)",
-    confidence: "98",
-    payout_ready_at: String(Math.floor(Date.now() / 1000) + 72000), // ~20 hours remaining
-    disputed_at: "0"
-  },
-  {
-    id: "policy_dak_lak_coffee_08",
-    underwriter: "0xunderwriter_pool_coffee",
-    insured: "0xfarmer_dak_lak_coop",
-    coverage_amount: "6500",
-    status: "CLOSED",
-    terms_url: "https://parametric.io/terms/coffee_drought_2026.json",
-    telemetry_url: "https://satellite.org/data/daklak_coffee_telemetry.json",
-    geo_coordinates: "12.6689 N, 108.0382 E",
-    drought_index_trigger: "Rainfall < 15mm in dry season",
-    verdict: "NO_DISASTER",
-    reason: "Normal climate parameters observed, coffee crop vitality index stable at NDVI = 0.38",
-    confidence: "92",
-    payout_ready_at: "0",
-    disputed_at: "0"
-  }
-];
-
 export default function App() {
   // Navigation tabs (Home, Terminal, Policies, About/FAQ)
   const [activeTab, setActiveTab] = useState<"home" | "terminal" | "policies" | "about">("home");
   const [showUnderwriteModal, setShowUnderwriteModal] = useState(false);
 
-  // App settings
-  const [isSimulatorMode, setIsSimulatorMode] = useState(true);
-  const [contractAddress, setContractAddress] = useState("0x7f4D2883017a151EFbB94E51016B61623190A956");
+  // App settings - Deployed Contract Address
+  const contractAddress = "0xba779EafE06ff3D043aEAfD6b4D22EFFaa3D0907";
   
   // Real GenLayer state
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -111,20 +56,21 @@ export default function App() {
   const [txLoading, setTxLoading] = useState(false);
   const [txMessage, setTxMessage] = useState("");
 
-  // GIS Coordinates State (pinned coordinates)
-  const [pinnedCoords, setPinnedCoords] = useState({ lat: 19.8067, lng: 105.7851, label: "Thanh Hoa Rice Farm" });
+  // Pinned coordinates from interactive GIS Map
+  const [pinnedCoords, setPinnedCoords] = useState({ lat: 19.8067, lng: 105.7851, label: "Selected Target Coordinate" });
   const [selectedStation, setSelectedStation] = useState("OPEN-METEO-VN-TH-01");
   const [mockTelemetryUrl, setMockTelemetryUrl] = useState("https://satellite-feed.copernicus.eu/telemetry_198067_1057851.json");
 
   // Selected Policy for Terminal view
-  const [selectedPolicyId, setSelectedPolicyId] = useState("policy_thanh_hoa_rice_01");
-  const [policies, setPolicies] = useState<Policy[]>(INITIAL_MOCK_POLICIES);
+  const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
+  const [policies, setPolicies] = useState<Policy[]>([]);
+  const [isLoadingPolicies, setIsLoadingPolicies] = useState(false);
 
-  // Pipeline execution animation state
+  // Pipeline execution animation state (running during real onchain TX wait)
   const [pipelineStep, setPipelineStep] = useState<number>(-1); // -1 = idle, 0 = satellite, 1 = NDVI, 2 = Weather, 3 = Consensus
   const [pipelineLogs, setPipelineLogs] = useState<string[]>([]);
 
-  // Enhanced Dispute Form State
+  // Dispute Form State
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeSensor, setDisputeSensor] = useState("Copernicus Sentinel-2");
   const [disputeRatio, setDisputeRatio] = useState("100% Payout");
@@ -137,19 +83,15 @@ export default function App() {
   // Form State for new Underwrite policy
   const [newPolicy, setNewPolicy] = useState({
     id: "policy_" + Math.random().toString(36).substring(2, 8),
-    insured: "0xfarmer_" + Math.random().toString(36).substring(2, 6),
+    insured: "",
     termsUrl: "https://parametric.io/terms/rice_irrigation_2026.json",
     geoCoords: "19.8067 N, 105.7851 E",
     droughtTrigger: "NDVI < 0.25 for 14 days OR Rainfall < 10mm",
     coverageAmount: "3000"
   });
 
-  // Current system timestamp in seconds (for mock clock)
-  const [currentMockTimeOffset, setCurrentMockTimeOffset] = useState<number>(0);
-  const getSystemTime = () => Math.floor(Date.now() / 1000) + currentMockTimeOffset;
-
   // Selected Policy Object
-  const currentPolicy = policies.find(p => p.id === selectedPolicyId) || policies[0];
+  const currentPolicy = policies.find(p => p.id === selectedPolicyId) || policies[0] || null;
 
   // Auto suggest telemetry link and weather station when map coordinates change
   useEffect(() => {
@@ -172,18 +114,67 @@ export default function App() {
     }));
   }, [pinnedCoords]);
 
+  // Load Policies from Smart Contract
+  const loadRealPolicies = async () => {
+    setIsLoadingPolicies(true);
+    try {
+      const { createClient } = await import("genlayer-js");
+      const { studionet } = await import("genlayer-js/chains");
+
+      const client = createClient({
+        chain: studionet,
+      });
+
+      const responseStr = await client.readContract({
+        address: contractAddress as `0x${string}`,
+        functionName: "get_all_policies",
+        args: []
+      });
+
+      if (responseStr) {
+        const parsed = JSON.parse(responseStr as string) as Policy[];
+        setPolicies(parsed);
+        if (parsed.length > 0 && !selectedPolicyId) {
+          setSelectedPolicyId(parsed[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load on-chain policies:", err);
+    } finally {
+      setIsLoadingPolicies(false);
+    }
+  };
+
+  // Check connection status on mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (typeof window.ethereum !== "undefined") {
+        try {
+          const accounts = await window.ethereum.request({ method: "eth_accounts" });
+          if (accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+          }
+        } catch (err) {
+          console.error("Error checking account connection:", err);
+        }
+      }
+      await loadRealPolicies();
+    };
+    checkConnection();
+  }, []);
+
   // Connect wallet handler
   const connectWallet = async () => {
     if (typeof window.ethereum === "undefined") {
-      alert("MetaMask is not installed. Please install MetaMask to connect to live network.");
+      alert("MetaMask is not installed. Please install MetaMask to connect to GenLayer Studionet.");
       return;
     }
     setIsConnecting(true);
     try {
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       setWalletAddress(accounts[0]);
-      setIsSimulatorMode(false); // Disable mock mode when wallet successfully connects
       await switchNetwork();
+      await loadRealPolicies();
     } catch (err) {
       console.error("Wallet connection failed:", err);
     } finally {
@@ -194,8 +185,6 @@ export default function App() {
   // Disconnect wallet handler
   const disconnectWallet = () => {
     setWalletAddress(null);
-    setIsSimulatorMode(true); // Return to safe simulator mode on disconnect
-    alert("Disconnected from Web3 Signer. Returned to local Simulator mode.");
   };
 
   // Switch network to Studionet
@@ -228,13 +217,10 @@ export default function App() {
     }
   };
 
-  // Dynamic NDVI mock curve mapping
+  // Generate dynamic chart points based on policy ID or status to reflect vegetation
   const generateNdviData = (): { day: number; ndvi: number; temp: number; rainfall: number }[] => {
     const data: { day: number; ndvi: number; temp: number; rainfall: number }[] = [];
-    const isDrought = 
-      (currentPolicy.status === "AWAITING_PAYOUT" && currentPolicy.verdict === "FULL_PAYOUT") || 
-      currentPolicy.status === "EVALUATING" ||
-      currentPolicy.id.includes("thanh_hoa");
+    const isDrought = currentPolicy && (currentPolicy.verdict === "FULL_PAYOUT" || currentPolicy.status === "AWAITING_PAYOUT" || currentPolicy.status === "DISPUTED");
 
     for (let i = 1; i <= 14; i++) {
       let ndvi = 0.35 + Math.sin(i / 3) * 0.08 + (Math.random() * 0.03 - 0.015);
@@ -259,8 +245,8 @@ export default function App() {
 
   const ndviPoints = generateNdviData();
 
-  // Run claim evaluation animation
-  const runClaimPipelineAnimation = (onFinish: () => void) => {
+  // Run progress scan logs during transaction wait
+  const startPipelineLogs = () => {
     setPipelineStep(0);
     setPipelineLogs(["Initializing Telemetry Assessment Interface..."]);
 
@@ -270,7 +256,7 @@ export default function App() {
       "[Satellite Data Ingestion] Payload size: 4.8MB, telemetry format compatible.",
       "[NDVI Index Calculation] Processing band reflections: NDVI = (NIR - Red) / (NIR + Red)",
       "[NDVI Index Calculation] Mapping chronological spectral curve over 14-day history...",
-      `[NDVI Index Calculation] Detected NDVI dip below threshold 0.25 starting from Day 3.`,
+      `[NDVI Index Calculation] Detected NDVI dip below threshold 0.25.`,
       "[Weather Station Validation] Querying meteorological partner Open-Meteo...",
       `[Weather Station Validation] Station confirmed temperature >= 38 C for consecutive days.`,
       `[Weather Station Validation] Rain gauge logged rainfall: deficit met.`,
@@ -281,30 +267,22 @@ export default function App() {
     ];
 
     let currentLogIndex = 0;
-    let progress = 0;
-    
     const timer = setInterval(() => {
-      progress += 8;
-      if (progress >= 100) {
-        clearInterval(timer);
-        setPipelineStep(4);
-        onFinish();
-        return;
-      }
-
-      if (progress > 25 && progress <= 50) {
-        setPipelineStep(1);
-      } else if (progress > 50 && progress <= 75) {
-        setPipelineStep(2);
-      } else if (progress > 75) {
-        setPipelineStep(3);
-      }
-
-      if (currentLogIndex < logMessages.length && Math.random() > 0.4) {
+      if (currentLogIndex < logMessages.length) {
         setPipelineLogs(prevLogs => [...prevLogs, logMessages[currentLogIndex]]);
+        
+        // Progress steps
+        if (currentLogIndex === 2) setPipelineStep(1);
+        if (currentLogIndex === 5) setPipelineStep(2);
+        if (currentLogIndex === 9) setPipelineStep(3);
+        
         currentLogIndex++;
+      } else {
+        clearInterval(timer);
       }
-    }, 400);
+    }, 1200);
+
+    return timer;
   };
 
   // WRITE Operations
@@ -312,359 +290,204 @@ export default function App() {
   // 1. Underwrite Policy
   const handleUnderwrite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSimulatorMode) {
-      const p: Policy = {
-        id: newPolicy.id,
-        underwriter: walletAddress || "0xmock_underwriter",
-        insured: newPolicy.insured.toLowerCase(),
-        coverage_amount: newPolicy.coverageAmount,
-        status: "ACTIVE",
-        terms_url: newPolicy.termsUrl,
-        telemetry_url: "",
-        geo_coordinates: newPolicy.geoCoords,
-        drought_index_trigger: newPolicy.droughtTrigger,
-        verdict: "NONE",
-        reason: "Policy active. Monitoring satellite parameters.",
-        confidence: "0",
-        payout_ready_at: "0",
-        disputed_at: "0"
-      };
-      setPolicies(prev => [...prev, p]);
-      setSelectedPolicyId(p.id);
-      setShowUnderwriteModal(false);
-      setNewPolicy({
-        id: "policy_" + Math.random().toString(36).substring(2, 8),
-        insured: "0xfarmer_" + Math.random().toString(36).substring(2, 6),
-        termsUrl: "https://parametric.io/terms/rice_irrigation_2026.json",
-        geoCoords: `${pinnedCoords.lat.toFixed(4)} N, ${pinnedCoords.lng.toFixed(4)} E`,
-        droughtTrigger: "NDVI < 0.25 for 14 days OR Rainfall < 10mm",
-        coverageAmount: "3000"
+    if (!walletAddress) {
+      alert("Please connect your wallet first.");
+      return;
+    }
+    setTxLoading(true);
+    setTxMessage("Deploying policy parameters & locking escrow pool on GenLayer Studionet...");
+    try {
+      const { createClient } = await import("genlayer-js");
+      const { studionet } = await import("genlayer-js/chains");
+      
+      const client = createClient({
+        chain: studionet,
+        provider: window.ethereum,
       });
-      setActiveTab("policies"); // Switch to list so they see it
-    } else {
-      setTxLoading(true);
-      setTxMessage("Deploying policy parameters & locking escrow pool on GenLayer Studionet...");
-      try {
-        const { createClient } = await import("genlayer-js");
-        const { studionet } = await import("genlayer-js/chains");
-        
-        const client = createClient({
-          chain: studionet,
-          provider: window.ethereum,
-        });
 
-        const hash = await client.writeContract({
-          address: contractAddress as `0x${string}`,
-          functionName: "underwrite_policy",
-          args: [
-            newPolicy.id,
-            newPolicy.insured,
-            newPolicy.termsUrl,
-            newPolicy.geoCoords,
-            newPolicy.droughtTrigger
-          ],
-          value: BigInt(newPolicy.coverageAmount)
-        });
+      const hash = await client.writeContract({
+        address: contractAddress as `0x${string}`,
+        functionName: "underwrite_policy",
+        args: [
+          newPolicy.id,
+          newPolicy.insured,
+          newPolicy.termsUrl,
+          newPolicy.geoCoords,
+          newPolicy.droughtTrigger
+        ],
+        value: BigInt(newPolicy.coverageAmount)
+      });
 
-        setTxMessage("Waiting for GenLayer block finalization...");
-        await client.waitForTransactionReceipt({ hash });
-        await loadRealPolicies();
-        setShowUnderwriteModal(false);
-        setActiveTab("policies");
-      } catch (err: any) {
-        alert("Transaction Failed: " + (err.message || err));
-      } finally {
-        setTxLoading(false);
-      }
+      setTxMessage("Waiting for GenLayer block finalization...");
+      await client.waitForTransactionReceipt({ hash });
+      await loadRealPolicies();
+      setShowUnderwriteModal(false);
+      setActiveTab("policies");
+    } catch (err: any) {
+      alert("Transaction Failed: " + (err.message || err));
+    } finally {
+      setTxLoading(false);
     }
   };
 
   // 2. Trigger Claim Assessment
   const handleTriggerAssessment = async (policyId: string) => {
-    const policy = policies.find(p => p.id === policyId);
-    if (!policy) return;
-
-    if (isSimulatorMode) {
-      setPolicies(prev => prev.map(p => {
-        if (p.id === policyId) {
-          return { ...p, status: "EVALUATING", telemetry_url: mockTelemetryUrl };
-        }
-        return p;
-      }));
-
-      runClaimPipelineAnimation(() => {
-        setPolicies(prev => prev.map(p => {
-          if (p.id === policyId) {
-            const isDrought = p.id.includes("rice") || p.id.includes("thanh_hoa") || p.id.includes("durian");
-            const verdict = isDrought ? "FULL_PAYOUT" : "NO_DISASTER";
-            const reason = isDrought 
-              ? "Severe crop vegetative degradation confirmed via NDVI multi-spectral analysis. Vegetation index fell to 0.18 over 14 consecutive days. Meteorological records verified 5mm rainfall."
-              : "Normalized Difference Vegetation Index stable at 0.38, indicating crop vitality is within safe agricultural limits. Claims dismissed.";
-            
-            return {
-              ...p,
-              status: "AWAITING_PAYOUT",
-              verdict: verdict,
-              reason: reason,
-              confidence: "95",
-              payout_ready_at: String(getSystemTime() + 86400)
-            };
-          }
-          return p;
-        }));
-      });
-    } else {
-      setTxLoading(true);
-      setTxMessage("Initiating satellite telemetry ingest and triggering AI Consensus...");
-      try {
-        const { createClient } = await import("genlayer-js");
-        const { studionet } = await import("genlayer-js/chains");
-
-        const client = createClient({
-          chain: studionet,
-          provider: window.ethereum,
-        });
-
-        const hash = await client.writeContract({
-          address: contractAddress as `0x${string}`,
-          functionName: "trigger_claim_assessment",
-          args: [policyId, mockTelemetryUrl],
-          value: 0n
-        });
-
-        runClaimPipelineAnimation(async () => {
-          setTxMessage("Finalizing assessment and recording on-chain verdict...");
-          await client.waitForTransactionReceipt({ hash });
-          await loadRealPolicies();
-        });
-      } catch (err: any) {
-        alert("Assessment Trigger Failed: " + (err.message || err));
-        setTxLoading(false);
-      }
-    }
-  };
-
-  // 3. Raise Dispute
-  const handleRaiseDispute = async (policyId: string) => {
-    if (!disputeReason.trim()) {
-      alert("Please provide a valid reason for raising a dispute.");
+    if (!walletAddress) {
+      alert("Please connect your wallet to interact with the blockchain.");
       return;
     }
 
-    if (isSimulatorMode) {
-      setPolicies(prev => prev.map(p => {
-        if (p.id === policyId) {
-          return {
-            ...p,
-            status: "DISPUTED",
-            reason: `[DISPUTED by Underwriter] ${disputeReason}. Evidence Source: ${disputeSensor}. Claimed Payout Ratio: ${disputeRatio}.`,
-            disputed_at: String(getSystemTime()),
-            dispute_evidence: disputeReason,
-            dispute_sensor_type: disputeSensor,
-            dispute_ratio: disputeRatio
-          };
-        }
-        return p;
-      }));
-      setShowDisputeInput(null);
-      setDisputeReason("");
-    } else {
-      setTxLoading(true);
-      setTxMessage("Locking contract payout pool and recording dispute logic...");
-      try {
-        const { createClient } = await import("genlayer-js");
-        const { studionet } = await import("genlayer-js/chains");
+    setTxLoading(true);
+    setTxMessage("Initiating satellite telemetry ingest and triggering AI Consensus...");
+    
+    // Start logging interval
+    const loggingTimer = startPipelineLogs();
 
-        const client = createClient({
-          chain: studionet,
-          provider: window.ethereum,
-        });
-
-        const formattedReason = `[Disputed via ${disputeSensor}] ${disputeReason} (${disputeRatio})`;
-        const hash = await client.writeContract({
-          address: contractAddress as `0x${string}`,
-          functionName: "raise_dispute",
-          args: [policyId, formattedReason],
-          value: 0n
-        });
-
-        await client.waitForTransactionReceipt({ hash });
-        await loadRealPolicies();
-        setShowDisputeInput(null);
-        setDisputeReason("");
-      } catch (err: any) {
-        alert("Dispute Transaction Failed: " + (err.message || err));
-      } finally {
-        setTxLoading(false);
-      }
-    }
-  };
-
-  // 4. Finalize Settlement
-  const handleFinalizeSettlement = async (policyId: string) => {
-    const policy = policies.find(p => p.id === policyId);
-    if (!policy) return;
-
-    const now = getSystemTime();
-    const readyAt = parseInt(policy.payout_ready_at);
-    if (now < readyAt) {
-      const remaining = readyAt - now;
-      const hours = Math.floor(remaining / 3600);
-      const minutes = Math.floor((remaining % 3600) / 60);
-      alert(`Settlement Locked: 24h cooling-off window is active. Remaining: ${hours}h ${minutes}m. Try 'FF 24H' button at the top to bypass this lock.`);
-      return;
-    }
-
-    if (isSimulatorMode) {
-      setPolicies(prev => prev.map(p => {
-        if (p.id === policyId) {
-          return {
-            ...p,
-            status: "CLOSED",
-            reason: `Claim closed successfully. Verdict [${p.verdict}] executed. Escrow distribution executed.`
-          };
-        }
-        return p;
-      }));
-    } else {
-      setTxLoading(true);
-      setTxMessage("Distributing escrow pools and closing policy...");
-      try {
-        const { createClient } = await import("genlayer-js");
-        const { studionet } = await import("genlayer-js/chains");
-
-        const client = createClient({
-          chain: studionet,
-          provider: window.ethereum,
-        });
-
-        const hash = await client.writeContract({
-          address: contractAddress as `0x${string}`,
-          functionName: "finalize_settlement",
-          args: [policyId],
-          value: 0n
-        });
-
-        await client.waitForTransactionReceipt({ hash });
-        await loadRealPolicies();
-      } catch (err: any) {
-        alert("Settlement Finalization Failed: " + (err.message || err));
-      } finally {
-        setTxLoading(false);
-      }
-    }
-  };
-
-  // 5. Resolve Escalation
-  const handleResolveEscalation = async (policyId: string) => {
-    if (isSimulatorMode) {
-      setPolicies(prev => prev.map(p => {
-        if (p.id === policyId) {
-          return {
-            ...p,
-            status: "CLOSED",
-            verdict: escalateAction,
-            reason: `[ADMIN ARBITRATED] Resolved via arbitration action: ${escalateAction}. Escrow distribution finalized.`,
-          };
-        }
-        return p;
-      }));
-      setShowEscalateInput(null);
-    } else {
-      setTxLoading(true);
-      setTxMessage("Broadcasting platform administrator settlement decision...");
-      try {
-        const { createClient } = await import("genlayer-js");
-        const { studionet } = await import("genlayer-js/chains");
-
-        const client = createClient({
-          chain: studionet,
-          provider: window.ethereum,
-        });
-
-        const hash = await client.writeContract({
-          address: contractAddress as `0x${string}`,
-          functionName: "resolve_escalation",
-          args: [policyId, escalateAction],
-          value: 0n
-        });
-
-        await client.waitForTransactionReceipt({ hash });
-        await loadRealPolicies();
-        setShowEscalateInput(null);
-      } catch (err: any) {
-        alert("Arbitration Settlement Failed: " + (err.message || err));
-      } finally {
-        setTxLoading(false);
-      }
-    }
-  };
-
-  // READ Operation - load policies from live smart contract
-  const loadRealPolicies = async () => {
-    if (isSimulatorMode) return;
     try {
       const { createClient } = await import("genlayer-js");
       const { studionet } = await import("genlayer-js/chains");
 
       const client = createClient({
         chain: studionet,
+        provider: window.ethereum,
       });
 
-      const responseStr = await client.readContract({
+      const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
-        functionName: "get_all_policies",
-        args: []
+        functionName: "trigger_claim_assessment",
+        args: [policyId, mockTelemetryUrl],
+        value: 0n
       });
 
-      if (responseStr) {
-        const parsed = JSON.parse(responseStr as string);
-        setPolicies(parsed);
-      }
-    } catch (err) {
-      console.error("Failed to load on-chain policies:", err);
+      setTxMessage("Finalizing assessment and recording on-chain verdict...");
+      await client.waitForTransactionReceipt({ hash });
+      
+      clearInterval(loggingTimer);
+      setPipelineStep(4);
+      setPipelineLogs(prev => [...prev, "[SUCCESS] Smart contract state updated on-chain!"]);
+      
+      await loadRealPolicies();
+    } catch (err: any) {
+      clearInterval(loggingTimer);
+      setPipelineStep(-1);
+      alert("Assessment Trigger Failed: " + (err.message || err));
+    } finally {
+      setTxLoading(false);
     }
   };
 
-  // Reload policies list when contract address changes or simulator mode is toggled
-  useEffect(() => {
-    if (!isSimulatorMode && contractAddress) {
-      loadRealPolicies();
-    } else if (isSimulatorMode) {
-      setPolicies(INITIAL_MOCK_POLICIES);
+  // 3. Raise Dispute
+  const handleRaiseDispute = async (policyId: string) => {
+    if (!walletAddress) {
+      alert("Please connect your wallet first.");
+      return;
     }
-  }, [isSimulatorMode, contractAddress]);
+    if (!disputeReason.trim()) {
+      alert("Please provide a valid reason for raising a dispute.");
+      return;
+    }
 
-  // Fast forward mock time offset helper
-  const handleFastForwardTime = () => {
-    setCurrentMockTimeOffset(prev => prev + 90000);
-    alert("Simulator time fast forwarded by 25 hours. Dispute periods and cooling-off timers elapsed!");
+    setTxLoading(true);
+    setTxMessage("Locking contract payout pool and recording dispute logic...");
+    try {
+      const { createClient } = await import("genlayer-js");
+      const { studionet } = await import("genlayer-js/chains");
+
+      const client = createClient({
+        chain: studionet,
+        provider: window.ethereum,
+      });
+
+      const formattedReason = `[Disputed via ${disputeSensor}] ${disputeReason} (${disputeRatio})`;
+      const hash = await client.writeContract({
+        address: contractAddress as `0x${string}`,
+        functionName: "raise_dispute",
+        args: [policyId, formattedReason],
+        value: 0n
+      });
+
+      await client.waitForTransactionReceipt({ hash });
+      await loadRealPolicies();
+      setShowDisputeInput(null);
+      setDisputeReason("");
+    } catch (err: any) {
+      alert("Dispute Transaction Failed: " + (err.message || err));
+    } finally {
+      setTxLoading(false);
+    }
+  };
+
+  // 4. Finalize Settlement
+  const handleFinalizeSettlement = async (policyId: string) => {
+    if (!walletAddress) {
+      alert("Please connect your wallet first.");
+      return;
+    }
+    setTxLoading(true);
+    setTxMessage("Distributing escrow pools and closing policy...");
+    try {
+      const { createClient } = await import("genlayer-js");
+      const { studionet } = await import("genlayer-js/chains");
+
+      const client = createClient({
+        chain: studionet,
+        provider: window.ethereum,
+      });
+
+      const hash = await client.writeContract({
+        address: contractAddress as `0x${string}`,
+        functionName: "finalize_settlement",
+        args: [policyId],
+        value: 0n
+      });
+
+      await client.waitForTransactionReceipt({ hash });
+      await loadRealPolicies();
+    } catch (err: any) {
+      alert("Settlement Finalization Failed: " + (err.message || err));
+    } finally {
+      setTxLoading(false);
+    }
+  };
+
+  // 5. Resolve Escalation
+  const handleResolveEscalation = async (policyId: string) => {
+    if (!walletAddress) {
+      alert("Please connect your wallet first.");
+      return;
+    }
+    setTxLoading(true);
+    setTxMessage("Broadcasting platform administrator settlement decision...");
+    try {
+      const { createClient } = await import("genlayer-js");
+      const { studionet } = await import("genlayer-js/chains");
+
+      const client = createClient({
+        chain: studionet,
+        provider: window.ethereum,
+      });
+
+      const hash = await client.writeContract({
+        address: contractAddress as `0x${string}`,
+        functionName: "resolve_escalation",
+        args: [policyId, escalateAction],
+        value: 0n
+      });
+
+      await client.waitForTransactionReceipt({ hash });
+      await loadRealPolicies();
+      setShowEscalateInput(null);
+    } catch (err: any) {
+      alert("Arbitration Settlement Failed: " + (err.message || err));
+    } finally {
+      setTxLoading(false);
+    }
   };
 
   // Formatting address helper
   const formatAddr = (addr: string) => {
     if (addr.length < 15) return addr;
     return addr.substring(0, 6) + "..." + addr.substring(addr.length - 4);
-  };
-
-  // Render countdown timers
-  const renderTimeRemaining = (policy: Policy) => {
-    if (policy.status !== "AWAITING_PAYOUT") return null;
-    const now = getSystemTime();
-    const readyAt = parseInt(policy.payout_ready_at);
-    if (now >= readyAt) {
-      return <span className="text-[#EAB308] border border-[#EAB308] px-2 py-0.5 rounded text-[10px] animate-pulse">SETTLEMENT AVAILABLE</span>;
-    }
-    const remaining = readyAt - now;
-    const hours = Math.floor(remaining / 3600);
-    const minutes = Math.floor((remaining % 3600) / 60);
-    const seconds = remaining % 60;
-    return (
-      <span className="text-[#38BDF8] border border-[#38BDF8]/30 bg-[#38BDF8]/10 px-2 py-0.5 rounded text-[10px] flex items-center gap-1 font-mono">
-        <Clock className="w-3 h-3 text-[#38BDF8] animate-spin" />
-        {hours}h {minutes}m {seconds}s LOCKED
-      </span>
-    );
   };
 
   return (
@@ -676,7 +499,7 @@ export default function App() {
             <Globe className="w-8 h-8 text-[#38BDF8] animate-pulse" />
             <div>
               <h1 className="text-xl font-bold tracking-wider text-white flex items-center gap-2">
-                PARAMETRIC SKY <span className="text-[#EAB308] text-xs px-2 py-0.5 border border-[#EAB308] rounded bg-[#EAB308]/10">DE-SCI TELEMETRY</span>
+                PARAMETRIC SKY <span className="text-[#EAB308] text-xs px-2 py-0.5 border border-[#EAB308] rounded bg-[#EAB308]/10">LIVE DE-SCI TESTNET</span>
               </h1>
               <p className="text-[10px] text-gray-400 font-mono tracking-widest uppercase">
                 Autonomous Crop Yield Escrow & Geo-Spatial Climate Oracle
@@ -686,41 +509,13 @@ export default function App() {
 
           {/* CONTROLS */}
           <div className="flex items-center gap-4">
-            {/* Mock simulator toggle */}
-            <div className="flex items-center gap-2 border border-[#38BDF8]/30 px-3 py-1.5 rounded-lg bg-[#0F161E]">
-              <label className="text-[11px] text-gray-400 font-mono flex items-center gap-1.5 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={isSimulatorMode} 
-                  onChange={(e) => setIsSimulatorMode(e.target.checked)}
-                  className="rounded border-[#38BDF8] text-[#38BDF8] focus:ring-0 cursor-pointer bg-[#0B0F12]"
-                />
-                MOCK SIMULATOR MODE
-              </label>
-              {isSimulatorMode && (
-                <button 
-                  onClick={handleFastForwardTime}
-                  className="text-[10px] bg-[#EAB308]/20 text-[#EAB308] border border-[#EAB308]/50 hover:bg-[#EAB308]/40 px-2 py-0.5 rounded font-mono transition"
-                  title="Fast forward 25 hours to bypass locks"
-                >
-                  FF 24H
-                </button>
-              )}
+            
+            {/* Live Smart Contract Address Indicator */}
+            <div className="flex items-center gap-2 border border-[#38BDF8]/20 px-3 py-1.5 rounded bg-[#0F161E] text-xs font-mono">
+              <Database className="w-4 h-4 text-[#38BDF8]" />
+              <span className="text-gray-400">Contract:</span>
+              <span className="text-white select-all">{contractAddress}</span>
             </div>
-
-            {/* Smart Contract Input Address */}
-            {!isSimulatorMode && (
-              <div className="flex items-center gap-2 border border-[#38BDF8]/20 px-2.5 py-1 rounded bg-[#0F161E]">
-                <Settings className="w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={contractAddress}
-                  onChange={(e) => setContractAddress(e.target.value)}
-                  placeholder="GenLayer Contract Address"
-                  className="bg-transparent text-[11px] font-mono border-none outline-none text-white w-[300px]"
-                />
-              </div>
-            )}
 
             {/* Connect / Disconnect wallet */}
             {walletAddress ? (
@@ -794,7 +589,7 @@ export default function App() {
                 
                 <div className="max-w-3xl space-y-4">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#EAB308]/15 text-[#EAB308] border border-[#EAB308]/20">
-                    <Cpu className="w-3.5 h-3.5 animate-spin" /> Powered by GenLayer AI Consensus & Space Imagery
+                    <Cpu className="w-3.5 h-3.5 animate-spin" /> Live GenLayer Studionet Testnet Mode
                   </div>
                   <h2 className="text-3xl font-extrabold text-white tracking-wide uppercase">
                     Space-to-Earth Autonomous Insurance Escrows
@@ -814,10 +609,16 @@ export default function App() {
                       Launch Radar Terminal <ChevronRight className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => setShowUnderwriteModal(true)}
+                      onClick={() => {
+                        if (!walletAddress) {
+                          connectWallet();
+                        } else {
+                          setShowUnderwriteModal(true);
+                        }
+                      }}
                       className="border border-[#EAB308] hover:bg-[#EAB308]/15 text-[#EAB308] font-bold px-6 py-2.5 rounded-lg text-xs font-mono flex items-center gap-2 transition uppercase"
                     >
-                      Underwrite Policy <Shield className="w-4 h-4" />
+                      {walletAddress ? "Underwrite Policy" : "Connect Wallet to Start"} <Shield className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -828,7 +629,7 @@ export default function App() {
                 <div className="bg-[#0F161E] border border-gray-800 rounded-xl p-5 flex items-center justify-between shadow-md">
                   <div>
                     <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">Total Active Escrows</span>
-                    <span className="text-xl font-bold text-white mt-1 block">3 Active Policies</span>
+                    <span className="text-xl font-bold text-white mt-1 block">{policies.length} Policies</span>
                   </div>
                   <Shield className="w-8 h-8 text-[#EAB308] opacity-60" />
                 </div>
@@ -836,7 +637,9 @@ export default function App() {
                 <div className="bg-[#0F161E] border border-gray-800 rounded-xl p-5 flex items-center justify-between shadow-md">
                   <div>
                     <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">Total Escrow Funds</span>
-                    <span className="text-xl font-bold text-[#38BDF8] mt-1 block">19,500 GEN</span>
+                    <span className="text-xl font-bold text-[#38BDF8] mt-1 block">
+                      {policies.reduce((sum, p) => sum + parseFloat(p.coverage_amount || "0"), 0).toLocaleString()} GEN
+                    </span>
                   </div>
                   <Database className="w-8 h-8 text-[#38BDF8] opacity-60" />
                 </div>
@@ -851,12 +654,12 @@ export default function App() {
 
                 <div className="bg-[#0F161E] border border-gray-800 rounded-xl p-5 flex items-center justify-between shadow-md">
                   <div>
-                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">Dapp Operational Mode</span>
-                    <span className="text-xl font-bold text-orange-500 mt-1 block">
-                      {isSimulatorMode ? "Mock Simulator" : "Studionet Active"}
+                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">Connection status</span>
+                    <span className={`text-xl font-bold mt-1 block ${walletAddress ? 'text-green-400' : 'text-red-400'}`}>
+                      {walletAddress ? "MetaMask Connected" : "Wallet Disconnected"}
                     </span>
                   </div>
-                  <Users className="w-8 h-8 text-orange-500 opacity-60" />
+                  <Users className="w-8 h-8 opacity-60" />
                 </div>
               </div>
 
@@ -922,7 +725,7 @@ export default function App() {
                       const y = e.clientY - rect.top;
                       const lat = 8.5 + (1 - y / rect.height) * 14.0;
                       const lng = 102.0 + (x / rect.width) * 8.0;
-                      setPinnedCoords({ lat, lng, label: `Telemetry Grid Point [x:${x.toFixed(0)}, y:${y.toFixed(0)}]` });
+                      setPinnedCoords({ lat, lng, label: `Coordinates [Lat:${lat.toFixed(4)}, Lng:${lng.toFixed(4)}]` });
                     }}
                   >
                     <div className="radar-sweep"></div>
@@ -1095,7 +898,7 @@ export default function App() {
                   {/* Additional crop metrics */}
                   <div className="grid grid-cols-3 gap-4 mt-3 text-center text-xs font-mono">
                     <div className="bg-[#0F161E] border border-[#38BDF8]/10 p-2 rounded">
-                      <span className="text-gray-400 block text-[10px]">MIN NDVI VALUE:</span>
+                      <span className="text-gray-400 block text-[10px]">CURRENT NDVI VALUE:</span>
                       <span className={`font-bold ${ndviPoints[13].ndvi < 0.25 ? 'text-red-500' : 'text-[#EAB308]'}`}>
                         {ndviPoints[13].ndvi}
                       </span>
@@ -1208,14 +1011,20 @@ export default function App() {
                       </div>
                     )}
 
-                    <button
-                      disabled={(currentPolicy.status !== "ACTIVE" && currentPolicy.status !== "DISPUTED") || pipelineStep >= 0}
-                      onClick={() => handleTriggerAssessment(currentPolicy.id)}
-                      className="w-full bg-[#EAB308] hover:bg-[#EAB308]/80 text-[#0B0F12] disabled:bg-gray-800 disabled:text-gray-500 font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 text-xs transition uppercase"
-                    >
-                      <Play className="w-4 h-4" /> Trigger Satellite Assessment
-                    </button>
-                    {currentPolicy.status !== "ACTIVE" && currentPolicy.status !== "DISPUTED" && (
+                    {currentPolicy ? (
+                      <button
+                        disabled={!walletAddress || (currentPolicy.status !== "ACTIVE" && currentPolicy.status !== "DISPUTED") || pipelineStep >= 0}
+                        onClick={() => handleTriggerAssessment(currentPolicy.id)}
+                        className="w-full bg-[#EAB308] hover:bg-[#EAB308]/80 text-[#0B0F12] disabled:bg-gray-800 disabled:text-gray-500 font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 text-xs transition uppercase"
+                      >
+                        <Play className="w-4 h-4" /> {walletAddress ? "Trigger On-Chain Assessment" : "Connect Wallet to Trigger"}
+                      </button>
+                    ) : (
+                      <div className="text-center text-gray-400 text-xs py-2 bg-[#0F161E] border border-gray-800 rounded">
+                        No policy selected to trigger.
+                      </div>
+                    )}
+                    {currentPolicy && currentPolicy.status !== "ACTIVE" && currentPolicy.status !== "DISPUTED" && (
                       <p className="text-[10px] text-gray-400 font-mono text-center mt-2">
                         Assessment only available for ACTIVE or DISPUTED policies.
                       </p>
@@ -1248,302 +1057,328 @@ export default function App() {
                       Go Home
                     </button>
                     <button
+                      disabled={!walletAddress}
                       onClick={() => setShowUnderwriteModal(true)}
-                      className="bg-[#38BDF8] hover:bg-[#38BDF8]/80 text-[#0B0F12] font-semibold px-4 py-2 rounded-lg text-xs font-mono flex items-center gap-1.5 transition"
+                      className="bg-[#38BDF8] hover:bg-[#38BDF8]/80 text-[#0B0F12] disabled:bg-gray-850 disabled:text-gray-500 font-semibold px-4 py-2 rounded-lg text-xs font-mono flex items-center gap-1.5 transition"
                     >
-                      <Shield className="w-4 h-4" /> UNDERWRITE NEW POLICY
+                      <Shield className="w-4 h-4" /> {walletAddress ? "UNDERWRITE NEW POLICY" : "CONNECT WALLET"}
                     </button>
                   </div>
                 </div>
 
-                {/* Policy Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono border-collapse">
-                    <thead>
-                      <tr className="border-b border-[#38BDF8]/20 text-gray-400 bg-[#0F161E]/50">
-                        <th className="p-3">POLICY ID</th>
-                        <th className="p-3">INSURED FARMER</th>
-                        <th className="p-3">UNDERWRITER</th>
-                        <th className="p-3">GEO COORDINATES</th>
-                        <th className="p-3 text-right">COVERAGE ESCROW</th>
-                        <th className="p-3 text-center">STATUS</th>
-                        <th className="p-3 text-center">VERDICT</th>
-                        <th className="p-3 text-center">CONFIDENCE</th>
-                        <th className="p-3 text-right">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {policies.map((p) => (
-                        <React.Fragment key={p.id}>
-                          <tr 
-                            onClick={() => {
-                              setSelectedPolicyId(p.id);
-                              const parts = p.geo_coordinates.split(",");
-                              if (parts.length === 2) {
-                                const lat = parseFloat(parts[0]);
-                                const lng = parseFloat(parts[1]);
-                                if (!isNaN(lat) && !isNaN(lng)) {
-                                  setPinnedCoords({ lat, lng, label: p.id });
+                {isLoadingPolicies ? (
+                  <div className="text-center py-20 flex flex-col items-center gap-3">
+                    <RefreshCw className="w-10 h-10 text-[#38BDF8] animate-spin" />
+                    <span className="text-xs font-mono text-gray-400 uppercase tracking-widest">Querying GenLayer Studionet Contract...</span>
+                  </div>
+                ) : policies.length === 0 ? (
+                  <div className="text-center py-20 border border-dashed border-gray-800 rounded-lg bg-black/10">
+                    <AlertCircle className="w-12 h-12 text-[#EAB308] mx-auto opacity-50 mb-3" />
+                    <h3 className="text-white font-bold text-sm uppercase">No On-Chain Policies Found</h3>
+                    <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto leading-relaxed">
+                      Connect your MetaMask wallet, switch to GenLayer Studionet, and click "Underwrite New Policy" to register and fund your first satellite weather contract.
+                    </p>
+                    {!walletAddress && (
+                      <button 
+                        onClick={connectWallet}
+                        className="mt-4 bg-[#38BDF8] hover:bg-[#38BDF8]/80 text-[#0B0F12] font-semibold px-4 py-1.5 rounded-lg text-xs font-mono transition"
+                      >
+                        Connect MetaMask Wallet
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-mono border-collapse">
+                      <thead>
+                        <tr className="border-b border-[#38BDF8]/20 text-gray-400 bg-[#0F161E]/50">
+                          <th className="p-3">POLICY ID</th>
+                          <th className="p-3">INSURED FARMER</th>
+                          <th className="p-3">UNDERWRITER</th>
+                          <th className="p-3">GEO COORDINATES</th>
+                          <th className="p-3 text-right">COVERAGE ESCROW</th>
+                          <th className="p-3 text-center">STATUS</th>
+                          <th className="p-3 text-center">VERDICT</th>
+                          <th className="p-3 text-center">CONFIDENCE</th>
+                          <th className="p-3 text-right">ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {policies.map((p) => (
+                          <React.Fragment key={p.id}>
+                            <tr 
+                              onClick={() => {
+                                setSelectedPolicyId(p.id);
+                                const parts = p.geo_coordinates.split(",");
+                                if (parts.length === 2) {
+                                  const lat = parseFloat(parts[0]);
+                                  const lng = parseFloat(parts[1]);
+                                  if (!isNaN(lat) && !isNaN(lng)) {
+                                    setPinnedCoords({ lat, lng, label: p.id });
+                                  }
                                 }
-                              }
-                            }}
-                            className={`border-b border-gray-800/50 hover:bg-[#0F161E]/30 cursor-pointer transition ${selectedPolicyId === p.id ? 'bg-[#38BDF8]/5 border-l-2 border-l-[#38BDF8]' : ''}`}
-                          >
-                            <td className="p-3 font-bold text-white">{p.id}</td>
-                            <td className="p-3 text-gray-300">{formatAddr(p.insured)}</td>
-                            <td className="p-3 text-gray-300">{formatAddr(p.underwriter)}</td>
-                            <td className="p-3 text-[#EAB308]">{p.geo_coordinates}</td>
-                            <td className="p-3 text-right font-bold text-white">{p.coverage_amount} GEN</td>
-                            
-                            <td className="p-3 text-center">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                p.status === "ACTIVE" ? "bg-[#EAB308]/10 text-[#EAB308] border border-[#EAB308]/20" :
-                                p.status === "EVALUATING" ? "bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/20 animate-pulse" :
-                                p.status === "AWAITING_PAYOUT" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
-                                p.status === "DISPUTED" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
-                                p.status === "ESCALATED" ? "bg-red-500/20 text-red-400 border border-red-500/40" :
-                                "bg-gray-800 text-gray-400"
-                              }`}>
-                                {p.status}
-                              </span>
-                            </td>
-
-                            <td className="p-3 text-center">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                p.verdict === "FULL_PAYOUT" ? "bg-green-500/15 text-green-500" :
-                                p.verdict === "PARTIAL_PAYOUT" ? "bg-yellow-500/15 text-[#EAB308]" :
-                                p.verdict === "NO_DISASTER" ? "bg-gray-800 text-gray-300" :
-                                p.verdict === "ESCALATE" ? "bg-red-500/15 text-red-500" :
-                                "text-gray-500"
-                              }`}>
-                                {p.verdict}
-                              </span>
-                            </td>
-
-                            <td className="p-3 text-center text-gray-300">
-                              {p.confidence !== "0" ? `${p.confidence}%` : "—"}
-                            </td>
-
-                            <td className="p-3 text-right">
-                              <div className="flex justify-end items-center gap-2">
-                                {renderTimeRemaining(p)}
-
-                                {p.status === "ACTIVE" && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleTriggerAssessment(p.id);
-                                    }}
-                                    className="bg-[#EAB308] hover:bg-[#EAB308]/80 text-[#0B0F12] px-2 py-1 rounded text-[11px] font-bold uppercase transition"
-                                  >
-                                    Assess
-                                  </button>
-                                )}
-
-                                {p.status === "AWAITING_PAYOUT" && (
-                                  <>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShowDisputeInput(p.id);
-                                      }}
-                                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-[11px] font-bold uppercase transition"
-                                    >
-                                      Dispute
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleFinalizeSettlement(p.id);
-                                      }}
-                                      className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-[11px] font-bold uppercase transition"
-                                    >
-                                      Finalize
-                                    </button>
-                                  </>
-                                )}
-
-                                {(p.status === "DISPUTED" || p.status === "ESCALATED") && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setShowEscalateInput(p.id);
-                                    }}
-                                    className="bg-[#38BDF8] hover:bg-[#38BDF8]/80 text-[#0B0F12] px-2 py-1 rounded text-[11px] font-bold uppercase transition"
-                                  >
-                                    Arbitrate
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-
-                          {/* Expandable Dispute Reason Panel */}
-                          {showDisputeInput === p.id && (
-                            <tr className="bg-red-950/20 border-b border-red-950/40">
-                              <td colSpan={9} className="p-4">
-                                <div className="flex flex-col gap-3 max-w-xl font-mono text-xs">
-                                  <span className="text-red-400 font-bold text-[11px] flex items-center gap-1">
-                                    <AlertCircle className="w-4 h-4 text-red-500" /> FILE PARAMETRIC ORACLE DISPUTE WITH EVIDENCE LOGS
-                                  </span>
-                                  
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                      <label className="text-gray-400 block mb-1">Select Disputed Sensor/Proof:</label>
-                                      <select
-                                        value={disputeSensor}
-                                        onChange={(e) => setDisputeSensor(e.target.value)}
-                                        className="w-full bg-[#0E151D] border border-red-500/30 p-2 rounded text-white outline-none focus:border-red-500"
-                                      >
-                                        <option value="Copernicus Sentinel-2">Copernicus Sentinel-2 Spectral Imagery</option>
-                                        <option value="NOAA weather Station">NOAA Ground Meteorology Station</option>
-                                        <option value="Open-Meteo Rain Gauge">Open-Meteo Local Rain Gauge</option>
-                                        <option value="Field Sensory Probe">Local Ground Agronomic Sensor Probe</option>
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="text-gray-400 block mb-1">Claimed Settlement Ratio:</label>
-                                      <select
-                                        value={disputeRatio}
-                                        onChange={(e) => setDisputeRatio(e.target.value)}
-                                        className="w-full bg-[#0E151D] border border-red-500/30 p-2 rounded text-white outline-none focus:border-red-500"
-                                      >
-                                        <option value="100% Payout">100% Full Claim Payout to Farmer</option>
-                                        <option value="50% Split">50% Compromise / 50% Refund</option>
-                                        <option value="100% Refund">100% Refund to Underwriter Escrow</option>
-                                      </select>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <label className="text-gray-400 block mb-1">Dispute Reasoning & Explanatory Evidence Proof:</label>
-                                    <input
-                                      type="text"
-                                      placeholder="Provide cryptographic or sensory rationale details..."
-                                      value={disputeReason}
-                                      onChange={(e) => setDisputeReason(e.target.value)}
-                                      className="w-full bg-black/80 border border-red-500/40 p-2 rounded text-white outline-none focus:border-red-500"
-                                    />
-                                  </div>
-
-                                  <div className="flex gap-2 pt-1">
-                                    <button
-                                      onClick={() => handleRaiseDispute(p.id)}
-                                      className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded text-[11px] transition uppercase"
-                                    >
-                                      File Dispute & Freeze Funds
-                                    </button>
-                                    <button
-                                      onClick={() => setShowDisputeInput(null)}
-                                      className="text-gray-400 hover:text-white text-[11px] px-2"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
+                              }}
+                              className={`border-b border-gray-800/50 hover:bg-[#0F161E]/30 cursor-pointer transition ${selectedPolicyId === p.id ? 'bg-[#38BDF8]/5 border-l-2 border-l-[#38BDF8]' : ''}`}
+                            >
+                              <td className="p-3 font-bold text-white">{p.id}</td>
+                              <td className="p-3 text-gray-300">{formatAddr(p.insured)}</td>
+                              <td className="p-3 text-gray-300">{formatAddr(p.underwriter)}</td>
+                              <td className="p-3 text-[#EAB308]">{p.geo_coordinates}</td>
+                              <td className="p-3 text-right font-bold text-white">{p.coverage_amount} GEN</td>
+                              
+                              <td className="p-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  p.status === "ACTIVE" ? "bg-[#EAB308]/10 text-[#EAB308] border border-[#EAB308]/20" :
+                                  p.status === "EVALUATING" ? "bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/20 animate-pulse" :
+                                  p.status === "AWAITING_PAYOUT" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
+                                  p.status === "DISPUTED" ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                                  p.status === "ESCALATED" ? "bg-red-500/20 text-red-400 border border-red-500/40" :
+                                  "bg-gray-800 text-gray-400"
+                                }`}>
+                                  {p.status}
+                                </span>
                               </td>
-                            </tr>
-                          )}
 
-                          {/* Expandable Arbitrate Escalation Panel */}
-                          {showEscalateInput === p.id && (
-                            <tr className="bg-[#38BDF8]/5 border-b border-[#38BDF8]/10">
-                              <td colSpan={9} className="p-4">
-                                <div className="flex flex-col gap-2 max-w-xl">
-                                  <span className="text-[#38BDF8] font-bold text-[11px] block">ADMINISTRATIVE ARBITRATION FOR DISPUTED CONTRACT</span>
+                              <td className="p-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  p.verdict === "FULL_PAYOUT" ? "bg-green-500/15 text-green-500" :
+                                  p.verdict === "PARTIAL_PAYOUT" ? "bg-yellow-500/15 text-[#EAB308]" :
+                                  p.verdict === "NO_DISASTER" ? "bg-gray-800 text-gray-300" :
+                                  p.verdict === "ESCALATE" ? "bg-red-500/15 text-red-500" :
+                                  "text-gray-500"
+                                }`}>
+                                  {p.verdict}
+                                </span>
+                              </td>
+
+                              <td className="p-3 text-center text-gray-300">
+                                {p.confidence !== "0" ? `${p.confidence}%` : "—"}
+                              </td>
+
+                              <td className="p-3 text-right">
+                                <div className="flex justify-end items-center gap-2">
                                   
-                                  {p.dispute_evidence && (
-                                    <div className="bg-black/50 border border-red-500/20 p-2.5 rounded text-[11px] mb-2">
-                                      <span className="text-red-400 font-bold block">Dispute Evidence Rationale:</span>
-                                      <p className="text-gray-300">{p.dispute_evidence}</p>
-                                      <span className="text-gray-400 text-[10px] mt-1 block">
-                                        Source: {p.dispute_sensor_type} | Requested Outcome: {p.dispute_ratio}
-                                      </span>
-                                    </div>
+                                  {p.status === "ACTIVE" && (
+                                    <button
+                                      disabled={!walletAddress}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTriggerAssessment(p.id);
+                                      }}
+                                      className="bg-[#EAB308] hover:bg-[#EAB308]/80 text-[#0B0F12] disabled:bg-gray-800 disabled:text-gray-500 px-2 py-1 rounded text-[11px] font-bold uppercase transition"
+                                    >
+                                      Assess
+                                    </button>
                                   )}
 
-                                  <div className="flex items-center gap-3">
-                                    <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
-                                      <input
-                                        type="radio"
-                                        name="action"
-                                        value="PAYOUT"
-                                        checked={escalateAction === "PAYOUT"}
-                                        onChange={() => setEscalateAction("PAYOUT")}
-                                        className="bg-black border-gray-800 text-[#38BDF8] focus:ring-0"
-                                      />
-                                      100% PAYOUT (Concede to Farmer)
-                                    </label>
-                                    <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
-                                      <input
-                                        type="radio"
-                                        name="action"
-                                        value="REFUND"
-                                        checked={escalateAction === "REFUND"}
-                                        onChange={() => setEscalateAction("REFUND")}
-                                        className="bg-black border-gray-800 text-[#38BDF8] focus:ring-0"
-                                      />
-                                      100% REFUND (Refund Underwriter)
-                                    </label>
-                                    <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
-                                      <input
-                                        type="radio"
-                                        name="action"
-                                        value="SPLIT"
-                                        checked={escalateAction === "SPLIT"}
-                                        onChange={() => setEscalateAction("SPLIT")}
-                                        className="bg-black border-gray-800 text-[#38BDF8] focus:ring-0"
-                                      />
-                                      50/50 SPLIT (Compromise Resolution)
-                                    </label>
-                                  </div>
-                                  <div className="flex gap-2 mt-2">
+                                  {p.status === "AWAITING_PAYOUT" && (
+                                    <>
+                                      <button
+                                        disabled={!walletAddress}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setShowDisputeInput(p.id);
+                                        }}
+                                        className="bg-red-500 hover:bg-red-600 disabled:bg-gray-800 disabled:text-gray-500 text-white px-2 py-1 rounded text-[11px] font-bold uppercase transition"
+                                      >
+                                        Dispute
+                                      </button>
+                                      <button
+                                        disabled={!walletAddress}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleFinalizeSettlement(p.id);
+                                        }}
+                                        className="bg-green-500 hover:bg-green-600 disabled:bg-gray-800 disabled:text-gray-500 text-white px-2 py-1 rounded text-[11px] font-bold uppercase transition"
+                                      >
+                                        Finalize
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {(p.status === "DISPUTED" || p.status === "ESCALATED") && (
                                     <button
-                                      onClick={() => handleResolveEscalation(p.id)}
-                                      className="bg-[#38BDF8] hover:bg-[#38BDF8]/80 text-[#0B0F12] font-bold px-3 py-1 rounded text-[11px] transition"
+                                      disabled={!walletAddress}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowEscalateInput(p.id);
+                                      }}
+                                      className="bg-[#38BDF8] hover:bg-[#38BDF8]/80 disabled:bg-gray-800 disabled:text-gray-500 text-[#0B0F12] px-2 py-1 rounded text-[11px] font-bold uppercase transition"
                                     >
-                                      Execute Settlement Resolution
+                                      Arbitrate
                                     </button>
-                                    <button
-                                      onClick={() => setShowEscalateInput(null)}
-                                      className="text-gray-400 hover:text-white text-[11px] px-2"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
+                                  )}
                                 </div>
                               </td>
                             </tr>
-                          )}
 
-                          {/* Extra info / description line */}
-                          <tr className="border-b border-gray-800/20 bg-black/10">
-                            <td colSpan={9} className="px-3 py-2.5 text-[10px] text-gray-400 leading-relaxed font-mono">
-                              <div className="flex flex-col gap-1.5">
-                                <div>
-                                  <span className="text-[#38BDF8] font-bold">Oracle Verdict Log:</span> {p.reason}
-                                </div>
-                                {p.confidence !== "0" && (
-                                  <div className="flex items-center gap-4 text-slate-500 text-[9px] pt-1 border-t border-gray-900">
-                                    <span>Jury Node Consensus Agreement: 100% (4/4 Validators)</span>
-                                    <span>•</span>
-                                    <span>Voter 1 (Aeneas LLM): AGREE</span>
-                                    <span>•</span>
-                                    <span>Voter 2 (Ithaca LLM): AGREE</span>
-                                    <span>•</span>
-                                    <span>Voter 3 (Adonis LLM): AGREE</span>
-                                    <span>•</span>
-                                    <span>Voter 4 (Minos LLM): AGREE</span>
+                            {/* Expandable Dispute Reason Panel */}
+                            {showDisputeInput === p.id && (
+                              <tr className="bg-red-950/20 border-b border-red-950/40">
+                                <td colSpan={9} className="p-4">
+                                  <div className="flex flex-col gap-3 max-w-xl font-mono text-xs">
+                                    <span className="text-red-400 font-bold text-[11px] flex items-center gap-1">
+                                      <AlertCircle className="w-4 h-4 text-red-500" /> FILE PARAMETRIC ORACLE DISPUTE WITH EVIDENCE LOGS
+                                    </span>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="text-gray-400 block mb-1">Select Disputed Sensor/Proof:</label>
+                                        <select
+                                          value={disputeSensor}
+                                          onChange={(e) => setDisputeSensor(e.target.value)}
+                                          className="w-full bg-[#0E151D] border border-red-500/30 p-2 rounded text-white outline-none focus:border-red-500"
+                                        >
+                                          <option value="Copernicus Sentinel-2">Copernicus Sentinel-2 Spectral Imagery</option>
+                                          <option value="NOAA weather Station">NOAA Ground Meteorology Station</option>
+                                          <option value="Open-Meteo Rain Gauge">Open-Meteo Local Rain Gauge</option>
+                                          <option value="Field Sensory Probe">Local Ground Agronomic Sensor Probe</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="text-gray-400 block mb-1">Claimed Settlement Ratio:</label>
+                                        <select
+                                          value={disputeRatio}
+                                          onChange={(e) => setDisputeRatio(e.target.value)}
+                                          className="w-full bg-[#0E151D] border border-red-500/30 p-2 rounded text-white outline-none focus:border-red-500"
+                                        >
+                                          <option value="100% Payout">100% Full Claim Payout to Farmer</option>
+                                          <option value="50% Split">50% Compromise / 50% Refund</option>
+                                          <option value="100% Refund">100% Refund to Underwriter Escrow</option>
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label className="text-gray-400 block mb-1">Dispute Reasoning & Explanatory Evidence Proof:</label>
+                                      <input
+                                        type="text"
+                                        placeholder="Provide cryptographic or sensory rationale details..."
+                                        value={disputeReason}
+                                        onChange={(e) => setDisputeReason(e.target.value)}
+                                        className="w-full bg-black/80 border border-red-500/40 p-2 rounded text-white outline-none focus:border-red-500"
+                                      />
+                                    </div>
+
+                                    <div className="flex gap-2 pt-1">
+                                      <button
+                                        onClick={() => handleRaiseDispute(p.id)}
+                                        className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded text-[11px] transition uppercase"
+                                      >
+                                        File Dispute & Freeze Funds
+                                      </button>
+                                      <button
+                                        onClick={() => setShowDisputeInput(null)}
+                                        className="text-gray-400 hover:text-white text-[11px] px-2"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                                </td>
+                              </tr>
+                            )}
+
+                            {/* Expandable Arbitrate Escalation Panel */}
+                            {showEscalateInput === p.id && (
+                              <tr className="bg-[#38BDF8]/5 border-b border-[#38BDF8]/10">
+                                <td colSpan={9} className="p-4">
+                                  <div className="flex flex-col gap-2 max-w-xl">
+                                    <span className="text-[#38BDF8] font-bold text-[11px] block">ADMINISTRATIVE ARBITRATION FOR DISPUTED CONTRACT</span>
+                                    
+                                    {p.dispute_evidence && (
+                                      <div className="bg-black/50 border border-red-500/20 p-2.5 rounded text-[11px] mb-2">
+                                        <span className="text-red-400 font-bold block">Dispute Evidence Rationale:</span>
+                                        <p className="text-gray-300">{p.dispute_evidence}</p>
+                                        <span className="text-gray-400 text-[10px] mt-1 block">
+                                          Source: {p.dispute_sensor_type} | Requested Outcome: {p.dispute_ratio}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    <div className="flex items-center gap-3">
+                                      <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="action"
+                                          value="PAYOUT"
+                                          checked={escalateAction === "PAYOUT"}
+                                          onChange={() => setEscalateAction("PAYOUT")}
+                                          className="bg-black border-gray-800 text-[#38BDF8] focus:ring-0"
+                                        />
+                                        100% PAYOUT (Concede to Farmer)
+                                      </label>
+                                      <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="action"
+                                          value="REFUND"
+                                          checked={escalateAction === "REFUND"}
+                                          onChange={() => setEscalateAction("REFUND")}
+                                          className="bg-black border-gray-800 text-[#38BDF8] focus:ring-0"
+                                        />
+                                        100% REFUND (Refund Underwriter)
+                                      </label>
+                                      <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="action"
+                                          value="SPLIT"
+                                          checked={escalateAction === "SPLIT"}
+                                          onChange={() => setEscalateAction("SPLIT")}
+                                          className="bg-black border-gray-800 text-[#38BDF8] focus:ring-0"
+                                        />
+                                        50/50 SPLIT (Compromise Resolution)
+                                      </label>
+                                    </div>
+                                    <div className="flex gap-2 mt-2">
+                                      <button
+                                        onClick={() => handleResolveEscalation(p.id)}
+                                        className="bg-[#38BDF8] hover:bg-[#38BDF8]/80 text-[#0B0F12] font-bold px-3 py-1  rounded text-[11px] transition"
+                                      >
+                                        Execute Settlement Resolution
+                                      </button>
+                                      <button
+                                        onClick={() => setShowEscalateInput(null)}
+                                        className="text-gray-400 hover:text-white text-[11px] px-2"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+
+                            {/* Extra info / description line */}
+                            <tr className="border-b border-gray-800/20 bg-black/10">
+                              <td colSpan={9} className="px-3 py-2.5 text-[10px] text-gray-400 leading-relaxed font-mono">
+                                <div className="flex flex-col gap-1.5">
+                                  <div>
+                                    <span className="text-[#38BDF8] font-bold">Oracle Verdict Log:</span> {p.reason}
+                                  </div>
+                                  {p.confidence !== "0" && (
+                                    <div className="flex items-center gap-4 text-slate-500 text-[9px] pt-1 border-t border-gray-900">
+                                      <span>Jury Node Consensus Agreement: 100% (4/4 Validators)</span>
+                                      <span>•</span>
+                                      <span>Voter 1 (Aeneas LLM): AGREE</span>
+                                      <span>•</span>
+                                      <span>Voter 2 (Ithaca LLM): AGREE</span>
+                                      <span>•</span>
+                                      <span>Voter 3 (Adonis LLM): AGREE</span>
+                                      <span>•</span>
+                                      <span>Voter 4 (Minos LLM): AGREE</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -1591,8 +1426,8 @@ export default function App() {
 
               <div className="border border-gray-800 pt-4 flex gap-4 text-[10px] text-gray-500">
                 <span>Status: Active</span>
-                <span>Network: Studionet / Mock</span>
-                <span>Version: v0.2.18</span>
+                <span>Network: Studionet Active</span>
+                <span>Version: v1.0.0</span>
               </div>
             </div>
           )}
@@ -1649,7 +1484,7 @@ export default function App() {
                 <span>•</span>
                 <a href="https://docs.genlayer.com" target="_blank" rel="noopener noreferrer" className="text-[#38BDF8] hover:underline">Developer Docs</a>
                 <span>•</span>
-                <a href="https://github.com/luongnhan9999/ParametricSky_luongnhan" target="_blank" rel="noopener noreferrer" className="text-[#38BDF8] hover:underline">GitHub Repository</a>
+                <a href="https://github.com/luongnhan9999/parametric-sky-genlayer" target="_blank" rel="noopener noreferrer" className="text-[#38BDF8] hover:underline">GitHub Repository</a>
               </div>
             </div>
 
@@ -1693,7 +1528,7 @@ export default function App() {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-gray-400 block mb-1">POLICY ID:</label>
+                <label className="text-gray-400 block mb-1">POLICY ID (Unique Name):</label>
                 <input 
                   type="text" 
                   required
@@ -1707,6 +1542,7 @@ export default function App() {
                 <input 
                   type="text" 
                   required
+                  placeholder="0x..."
                   value={newPolicy.insured} 
                   onChange={(e) => setNewPolicy(p => ({ ...p, insured: e.target.value }))}
                   className="w-full bg-[#0E151D] border border-[#38BDF8]/20 p-2 text-white outline-none rounded focus:border-[#38BDF8]"
