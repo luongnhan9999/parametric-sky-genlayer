@@ -48,7 +48,7 @@ export default function App() {
   const [showUnderwriteModal, setShowUnderwriteModal] = useState(false);
 
   // App settings - Deployed Contract Address
-  const contractAddress = "0xba779EafE06ff3D043aEAfD6b4D22EFFaa3D0907";
+  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS || "0x5f1D854944C7B76c0fFb9fd4258F48F25A563B25";
   
   // Real GenLayer state
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
