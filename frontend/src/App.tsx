@@ -303,12 +303,12 @@ export default function App() {
       const client = createClient({
         chain: studionet,
         provider: window.ethereum,
+        account: walletAddress as `0x${string}`,
       });
 
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "underwrite_policy",
-        account: walletAddress as any,
         args: [
           newPolicy.id,
           newPolicy.insured,
@@ -351,12 +351,12 @@ export default function App() {
       const client = createClient({
         chain: studionet,
         provider: window.ethereum,
+        account: walletAddress as `0x${string}`,
       });
 
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "trigger_claim_assessment",
-        account: walletAddress as any,
         args: [policyId, mockTelemetryUrl],
         value: 0n
       });
@@ -398,13 +398,13 @@ export default function App() {
       const client = createClient({
         chain: studionet,
         provider: window.ethereum,
+        account: walletAddress as `0x${string}`,
       });
 
       const formattedReason = `[Disputed via ${disputeSensor}] ${disputeReason} (${disputeRatio})`;
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "raise_dispute",
-        account: walletAddress as any,
         args: [policyId, formattedReason],
         value: 0n
       });
@@ -435,12 +435,12 @@ export default function App() {
       const client = createClient({
         chain: studionet,
         provider: window.ethereum,
+        account: walletAddress as `0x${string}`,
       });
 
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "finalize_settlement",
-        account: walletAddress as any,
         args: [policyId],
         value: 0n
       });
@@ -469,12 +469,12 @@ export default function App() {
       const client = createClient({
         chain: studionet,
         provider: window.ethereum,
+        account: walletAddress as `0x${string}`,
       });
 
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "resolve_escalation",
-        account: walletAddress as any,
         args: [policyId, escalateAction],
         value: 0n
       });
@@ -1525,7 +1525,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
           <form 
             onSubmit={handleUnderwrite}
-            className="bg-[#0B0F12] border border-[#38BDF8]/40 p-6 rounded-lg max-w-lg w-full space-y-4 font-mono text-xs"
+            className="bg-[#0B0F12] border border-[#38BDF8]/40 p-6 rounded-lg max-w-2xl w-full space-y-4 font-mono text-xs"
           >
             <h3 className="text-white font-bold text-sm tracking-wider uppercase border-b border-[#38BDF8]/10 pb-2 flex items-center gap-1.5">
               <Shield className="w-4.5 h-4.5 text-[#EAB308]" /> Underwrite New Climate Policy
