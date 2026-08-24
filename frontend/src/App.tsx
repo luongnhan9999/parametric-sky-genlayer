@@ -308,6 +308,7 @@ export default function App() {
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "underwrite_policy",
+        account: walletAddress as any,
         args: [
           newPolicy.id,
           newPolicy.insured,
@@ -355,6 +356,7 @@ export default function App() {
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "trigger_claim_assessment",
+        account: walletAddress as any,
         args: [policyId, mockTelemetryUrl],
         value: 0n
       });
@@ -402,6 +404,7 @@ export default function App() {
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "raise_dispute",
+        account: walletAddress as any,
         args: [policyId, formattedReason],
         value: 0n
       });
@@ -437,6 +440,7 @@ export default function App() {
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "finalize_settlement",
+        account: walletAddress as any,
         args: [policyId],
         value: 0n
       });
@@ -470,6 +474,7 @@ export default function App() {
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "resolve_escalation",
+        account: walletAddress as any,
         args: [policyId, escalateAction],
         value: 0n
       });
