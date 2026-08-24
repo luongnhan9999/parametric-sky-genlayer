@@ -114,6 +114,16 @@ export default function App() {
     }));
   }, [pinnedCoords]);
 
+  // Format GEN from raw wei values
+  const formatGEN = (amountWeiStr: string): number => {
+    try {
+      const amount = BigInt(amountWeiStr || "0");
+      return Number(amount / 10n**12n) / 1000000;
+    } catch (e) {
+      return 0;
+    }
+  };
+
   // Load Policies from Smart Contract
   const loadRealPolicies = async () => {
     setIsLoadingPolicies(true);
@@ -316,7 +326,7 @@ export default function App() {
           newPolicy.geoCoords,
           newPolicy.droughtTrigger
         ],
-        value: BigInt(newPolicy.coverageAmount)
+        value: BigInt(Math.floor(parseFloat(newPolicy.coverageAmount || "0") * 1000000)) * 10n**12n
       });
 
       setTxMessage("Waiting for GenLayer block finalization...");
@@ -643,7 +653,7 @@ export default function App() {
                   <div>
                     <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">Total Escrow Funds</span>
                     <span className="text-xl font-bold text-[#38BDF8] mt-1 block">
-                      {policies.reduce((sum, p) => sum + parseFloat(p.coverage_amount || "0"), 0).toLocaleString()} GEN
+                      {policies.reduce((sum, p) => sum + formatGEN(p.coverage_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} GEN
                     </span>
                   </div>
                   <Database className="w-8 h-8 text-[#38BDF8] opacity-60" />
@@ -1139,7 +1149,7 @@ export default function App() {
                               <td className="p-3 text-gray-300">{formatAddr(p.insured)}</td>
                               <td className="p-3 text-gray-300">{formatAddr(p.underwriter)}</td>
                               <td className="p-3 text-[#EAB308]">{p.geo_coordinates}</td>
-                              <td className="p-3 text-right font-bold text-white">{p.coverage_amount} GEN</td>
+                              <td className="p-3 text-right font-bold text-white">{formatGEN(p.coverage_amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} GEN</td>
                               
                               <td className="p-3 text-center">
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
