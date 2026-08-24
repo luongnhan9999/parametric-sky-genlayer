@@ -112,7 +112,7 @@ export default function App() {
   const [txMessage, setTxMessage] = useState("");
 
   // GIS Coordinates State (pinned coordinates)
-  const [pinnedCoords, setPinnedCoords] = useState({ lat: 19.8067, lng: 105.7851, label: "Thanh Hóa Rice Farm" });
+  const [pinnedCoords, setPinnedCoords] = useState({ lat: 19.8067, lng: 105.7851, label: "Thanh Hoa Rice Farm" });
   const [selectedStation, setSelectedStation] = useState("OPEN-METEO-VN-TH-01");
   const [mockTelemetryUrl, setMockTelemetryUrl] = useState("https://satellite-feed.copernicus.eu/telemetry_198067_1057851.json");
 
@@ -159,9 +159,9 @@ export default function App() {
     
     // Choose weather station based on nearest region
     if (pinnedCoords.lat > 18) {
-      setSelectedStation("OPEN-METEO-VN-TH-01 (Thanh Hóa Region)");
+      setSelectedStation("OPEN-METEO-VN-TH-01 (Thanh Hoa Region)");
     } else if (pinnedCoords.lat > 12) {
-      setSelectedStation("COP-SENTINEL-VN-DL-08 (Đắk Lắk Central Highlands)");
+      setSelectedStation("COP-SENTINEL-VN-DL-08 (Dak Lak Central Highlands)");
     } else {
       setSelectedStation("NOAA-STATION-VN-MK-05 (Mekong Delta Region)");
     }
@@ -943,9 +943,9 @@ export default function App() {
                     <div className="absolute w-[80px] h-[80px] border border-[#38BDF8]/10 rounded-full pointer-events-none"></div>
 
                     {/* Landmarks */}
-                    <div className="absolute top-[20%] left-[60%] text-[9px] text-[#38BDF8]/40 select-none">HÀ NỘI GRID</div>
-                    <div className="absolute top-[32%] left-[55%] text-[9px] text-[#38BDF8]/40 select-none">THANH HÓA COOP</div>
-                    <div className="absolute top-[60%] left-[80%] text-[9px] text-[#38BDF8]/40 select-none">ĐẮK LẮK RANGE</div>
+                    <div className="absolute top-[20%] left-[60%] text-[9px] text-[#38BDF8]/40 select-none">HA NOI GRID</div>
+                    <div className="absolute top-[32%] left-[55%] text-[9px] text-[#38BDF8]/40 select-none">THANH HOA COOP</div>
+                    <div className="absolute top-[60%] left-[80%] text-[9px] text-[#38BDF8]/40 select-none">DAK LAK RANGE</div>
                     <div className="absolute top-[82%] left-[45%] text-[9px] text-[#38BDF8]/40 select-none">MEKONG BASIN</div>
 
                     {/* Blinking marker */}
