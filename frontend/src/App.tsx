@@ -59,7 +59,7 @@ export default function App() {
   // Pinned coordinates from interactive GIS Map
   const [pinnedCoords, setPinnedCoords] = useState({ lat: 19.8067, lng: 105.7851, label: "Selected Target Coordinate" });
   const [selectedStation, setSelectedStation] = useState("OPEN-METEO-VN-TH-01");
-  const [mockTelemetryUrl, setMockTelemetryUrl] = useState("https://satellite-feed.copernicus.eu/telemetry_198067_1057851.json");
+  const [satelliteTelemetryUrl, setSatelliteTelemetryUrl] = useState("https://satellite-feed.copernicus.eu/telemetry_198067_1057851.json");
 
   // Selected Policy for Terminal view
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
@@ -97,7 +97,7 @@ export default function App() {
   useEffect(() => {
     const latStr = pinnedCoords.lat.toFixed(4);
     const lngStr = pinnedCoords.lng.toFixed(4);
-    setMockTelemetryUrl(`https://satellite-feed.copernicus.eu/telemetry_${latStr.replace(".", "")}_${lngStr.replace(".", "")}.json`);
+    setSatelliteTelemetryUrl(`https://satellite-feed.copernicus.eu/telemetry_${latStr.replace(".", "")}_${lngStr.replace(".", "")}.json`);
     
     // Choose weather station based on nearest region
     if (pinnedCoords.lat > 18) {
@@ -357,7 +357,7 @@ export default function App() {
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "trigger_claim_assessment",
-        args: [policyId, mockTelemetryUrl],
+        args: [policyId, satelliteTelemetryUrl],
         value: 0n
       });
 
@@ -788,7 +788,7 @@ export default function App() {
                     </div>
                     <div>
                       <div className="text-gray-400 text-[10px]">TELEMETRY FEED URL:</div>
-                      <div className="text-gray-300 truncate" title={mockTelemetryUrl}>{mockTelemetryUrl}</div>
+                      <div className="text-gray-300 truncate" title={satelliteTelemetryUrl}>{satelliteTelemetryUrl}</div>
                     </div>
                   </div>
                 </div>
