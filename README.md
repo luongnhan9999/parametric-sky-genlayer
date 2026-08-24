@@ -86,3 +86,10 @@ Open your browser to `http://localhost:5173`.
 * **Live App:** https://parametric-sky-genlayer.vercel.app
 * **Deployed Contract:** `0xba779EafE06ff3D043aEAfD6b4D22EFFaa3D0907`
 * **Explorer Link:** https://genlayer-explorer.vercel.app/address/0xba779EafE06ff3D043aEAfD6b4D22EFFaa3D0907
+
+---
+
+## 📝 Notes / Description
+* **GenLayer Integration Necessity:** Traditional EVM blockchains are limited to deterministic execution and cannot access web data natively. GenLayer resolves this by introducing an Intelligent AI Consensus VM, enabling the contract to query satellite imagery directly and make subjective evaluations through decentralized LLM nodes.
+* **Mock Simulator Mode:** To make the application instantly testable in any browser environment, the dApp features a robust Simulator mode that mimics on-chain policies, progress logs, and consensus outcomes.
+* **Fast-Forward (FF 24H) Utility:** Bypasses the 24-hour dispute cooling-off window in Simulator mode so developers can test the full payout/refund cycle instantly.
