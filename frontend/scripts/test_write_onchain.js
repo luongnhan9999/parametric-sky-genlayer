@@ -22,12 +22,16 @@ async function main() {
       account,
     });
 
-    const policyId = `test_script_${Math.random().toString(36).substring(2, 8)}`;
-    const insuredAddress = account.address; // Use same address for simplicity
-    const termsUrl = "https://parametric.io/terms/rice_irrigation_2026.json";
+    const policyId = `real_weather_${Math.random().toString(36).substring(2, 8)}`;
+    const insuredAddress = account.address;
+    
+    // Live RAW README text on GitHub (contains policy terms definitions)
+    const termsUrl = "https://raw.githubusercontent.com/luongnhan9999/parametric-sky-genlayer/main/README.md";
+    
     const geoCoords = "19.8067 N, 105.7851 E";
-    const droughtTrigger = "NDVI < 0.25 for 14 days OR Rainfall < 10mm";
-    const coverageAmount = 5n * 10n**18n; // 5 GEN (scaled correctly to 18 decimals)
+    const droughtTrigger = "NDVI < 0.25 for 14 days OR Temperature > 30 C";
+    
+    const coverageAmount = 5n * 10n**18n; // 5 GEN
 
     console.log(`\nStep 1: Underwriting policy '${policyId}' with 5 GEN...`);
     const underwriteHash = await client.writeContract({
@@ -43,7 +47,8 @@ async function main() {
     console.log("SUCCESS: Underwritten successfully!");
 
     console.log(`\nStep 2: Triggering claim assessment for '${policyId}'...`);
-    const telemetryUrl = "https://satellite-feed.copernicus.eu/telemetry_198067_1057851.json";
+    // Live free weather API endpoint for temperature & precipitation
+    const telemetryUrl = "https://api.open-meteo.com/v1/forecast?latitude=19.8067&longitude=105.7851&current=temperature_2m,relative_humidity_2m,rain";
     const triggerHash = await client.writeContract({
       address: contractAddress,
       functionName: "trigger_claim_assessment",
