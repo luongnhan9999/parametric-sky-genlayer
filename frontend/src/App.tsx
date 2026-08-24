@@ -1016,15 +1016,22 @@ export default function App() {
                       </div>
                     )}
 
-                    {currentPolicy ? (
-                      <button
-                        disabled={!walletAddress || (currentPolicy.status !== "ACTIVE" && currentPolicy.status !== "DISPUTED") || pipelineStep >= 0}
-                        onClick={() => handleTriggerAssessment(currentPolicy.id)}
-                        className="w-full bg-[#EAB308] hover:bg-[#EAB308]/80 text-[#0B0F12] disabled:bg-gray-800 disabled:text-gray-500 font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 text-xs transition uppercase"
-                      >
-                        <Play className="w-4 h-4" /> {walletAddress ? "Trigger On-Chain Assessment" : "Connect Wallet to Trigger"}
-                      </button>
-                    ) : (
+                    {currentPolicy ? (() => {
+                      const isUnderwriter = !!(walletAddress && walletAddress.toLowerCase() === currentPolicy.underwriter.toLowerCase());
+                      return (
+                        <button
+                          disabled={!walletAddress || isUnderwriter || (currentPolicy.status !== "ACTIVE" && currentPolicy.status !== "DISPUTED") || pipelineStep >= 0}
+                          onClick={() => handleTriggerAssessment(currentPolicy.id)}
+                          className="w-full bg-[#EAB308] hover:bg-[#EAB308]/80 text-[#0B0F12] disabled:bg-gray-800 disabled:text-gray-500 font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 text-xs transition uppercase"
+                        >
+                          <Play className="w-4 h-4" /> {
+                            !walletAddress ? "Connect Wallet to Trigger" : 
+                            isUnderwriter ? "Underwriter Unauthorized" : 
+                            "Trigger On-Chain Assessment"
+                          }
+                        </button>
+                      );
+                    })() : (
                       <div className="text-center text-gray-400 text-xs py-2 bg-[#0F161E] border border-gray-800 rounded">
                         No policy selected to trigger.
                       </div>
@@ -1109,9 +1116,12 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {policies.map((p) => (
-                          <React.Fragment key={p.id}>
-                            <tr 
+                        {policies.map((p) => {
+                          const isUserUnderwriter = !!(walletAddress && walletAddress.toLowerCase() === p.underwriter.toLowerCase());
+                          const isUserInsured = !!(walletAddress && walletAddress.toLowerCase() === p.insured.toLowerCase());
+                          return (
+                            <React.Fragment key={p.id}>
+                              <tr 
                               onClick={() => {
                                 setSelectedPolicyId(p.id);
                                 const parts = p.geo_coordinates.split(",");
@@ -1165,11 +1175,12 @@ export default function App() {
                                   
                                   {p.status === "ACTIVE" && (
                                     <button
-                                      disabled={!walletAddress}
+                                      disabled={!walletAddress || isUserUnderwriter}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleTriggerAssessment(p.id);
                                       }}
+                                      title={isUserUnderwriter ? "Only the Insured Farmer can trigger assessment" : ""}
                                       className="bg-[#EAB308] hover:bg-[#EAB308]/80 text-[#0B0F12] disabled:bg-gray-800 disabled:text-gray-500 px-2 py-1 rounded text-[11px] font-bold uppercase transition"
                                     >
                                       Assess
@@ -1179,21 +1190,23 @@ export default function App() {
                                   {p.status === "AWAITING_PAYOUT" && (
                                     <>
                                       <button
-                                        disabled={!walletAddress}
+                                        disabled={!walletAddress || (p.verdict === "NO_DISASTER" ? !isUserInsured : !isUserUnderwriter)}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setShowDisputeInput(p.id);
                                         }}
+                                        title={p.verdict === "NO_DISASTER" ? "Only the Insured Farmer can dispute a dismissal" : "Only the Underwriter can dispute a payout"}
                                         className="bg-red-500 hover:bg-red-600 disabled:bg-gray-800 disabled:text-gray-500 text-white px-2 py-1 rounded text-[11px] font-bold uppercase transition"
                                       >
                                         Dispute
                                       </button>
                                       <button
-                                        disabled={!walletAddress}
+                                        disabled={!walletAddress || (p.verdict === "NO_DISASTER" ? !isUserUnderwriter : !isUserInsured)}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           handleFinalizeSettlement(p.id);
                                         }}
+                                        title={p.verdict === "NO_DISASTER" ? "Only the Underwriter can claim the refund" : "Only the Insured Farmer can claim the payout"}
                                         className="bg-green-500 hover:bg-green-600 disabled:bg-gray-800 disabled:text-gray-500 text-white px-2 py-1 rounded text-[11px] font-bold uppercase transition"
                                       >
                                         Finalize
@@ -1379,7 +1392,8 @@ export default function App() {
                               </td>
                             </tr>
                           </React.Fragment>
-                        ))}
+                        );
+                      })}
                       </tbody>
                     </table>
                   </div>
