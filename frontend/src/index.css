@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0B0F12;
+  color: #38BDF8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  overflow-x: hidden;
+}
+
+/* Custom terminal/radar grid styles */
+.terminal-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+}
+
+.radar-sweep {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(56, 189, 248, 0.15) 0deg,
+    rgba(56, 189, 248, 0.05) 90deg,
+    transparent 180deg
+  );
+  border-radius: 50%;
+  animation: radar-rotate 8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes radar-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Terminal Scanlines Overlay */
+.scanlines {
+  position: relative;
+}
+.scanlines::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* Neon glow animations */
+.glow-cyan {
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+.glow-golden {
+  text-shadow: 0 0 8px rgba(234, 179, 8, 0.6);
+}
+.glow-red {
+  text-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+}
