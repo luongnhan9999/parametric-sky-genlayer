@@ -86,7 +86,7 @@ export default function App() {
     id: "policy_" + Math.random().toString(36).substring(2, 8),
     insured: "",
     termsUrl: "https://raw.githubusercontent.com/luongnhan9999/parametric-sky-genlayer/main/README.md",
-    termsHash: "5f8a614833ce8bb29094171a49a74cf0e15e3b8a1c8b36c84c171e21b79ea93e", // Default SHA-256 hash of README
+    termsHash: "522ab4262cc4f4c90bb8a18b8597927b53d2bd141c6d19e9c97dfc7225c3f3bd", // Default SHA-256 hash of README
     telemetryUrl: "https://api.open-meteo.com/v1/forecast?latitude=19.8067&longitude=105.7851&current=temperature_2m,relative_humidity_2m,rain",
     geoCoords: "19.8067 N, 105.7851 E",
     droughtTrigger: "NDVI < 0.25 for 14 days OR Temperature > 30 C",
