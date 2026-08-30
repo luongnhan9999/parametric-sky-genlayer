@@ -14,6 +14,7 @@ class Policy:
     premium_paid: bigint
     status: str            # ACTIVE, EVALUATING, AWAITING_PAYOUT, DISPUTED, ESCALATED, CLOSED
     terms_url: str         # URL to insurance policy terms & NDVI thresholds
+    terms_hash: str        # Cryptographic hash of the terms payload (immutability)
     telemetry_url: str     # Public open weather/satellite telemetry endpoint for target coordinates
     geo_coordinates: str   # Lat/Long (e.g. "19.8067 N, 105.7851 E")
     drought_index_trigger: str # Trigger rule: "NDVI < 0.25 for 14 days OR Rainfall < 10mm"
@@ -83,6 +84,8 @@ class Contract(gl.Contract):
         policy_id: str,
         insured_address: str,
         terms_url: str,
+        terms_hash: str,
+        telemetry_url: str,
         geo_coordinates: str,
         drought_index_trigger: str
     ) -> None:
@@ -95,6 +98,10 @@ class Contract(gl.Contract):
             raise UserError("Coverage pool deposit must be strictly positive")
         if not terms_url.startswith("http"):
             raise UserError("Valid policy terms HTTP/HTTPS URL required")
+        if not terms_hash or len(terms_hash) < 10:
+            raise UserError("Valid policy terms cryptographic hash required")
+        if not telemetry_url.startswith("http"):
+            raise UserError("Valid satellite telemetry HTTP/HTTPS URL required")
 
         caller = str(gl.message.sender_address).lower()
         
@@ -106,7 +113,8 @@ class Contract(gl.Contract):
             premium_paid=bigint(0),
             status="ACTIVE",
             terms_url=terms_url.strip(),
-            telemetry_url="",
+            terms_hash=terms_hash.strip(),
+            telemetry_url=telemetry_url.strip(),
             geo_coordinates=geo_coordinates.strip(),
             drought_index_trigger=drought_index_trigger.strip(),
             verdict="NONE",
@@ -118,7 +126,7 @@ class Contract(gl.Contract):
         self.policy_ids.append(policy_id)
 
     @gl.public.write
-    def trigger_claim_assessment(self, policy_id: str, telemetry_url: str) -> None:
+    def trigger_claim_assessment(self, policy_id: str) -> None:
         """Insured farmer triggers automated parametric evaluation via satellite telemetry endpoint."""
         if policy_id not in self.policies:
             raise UserError("Policy not found")
@@ -129,27 +137,34 @@ class Contract(gl.Contract):
             raise UserError("Unauthorized: Only the insured farmer can trigger assessment")
         if policy.status not in ["ACTIVE", "DISPUTED"]:
             raise UserError("Policy is not in an assessable status")
-        if not telemetry_url.startswith("http"):
-            raise UserError("Valid satellite telemetry HTTP/HTTPS URL required")
 
-        policy.telemetry_url = telemetry_url.strip()
         policy.status = "EVALUATING"
         self.policies[policy_id] = policy
 
         terms_str = policy.terms_url
+        expected_hash = policy.terms_hash
         telem_str = policy.telemetry_url
         geo_str = policy.geo_coordinates
         trigger_str = policy.drought_index_trigger
 
         def leader_fn() -> dict:
-            # 1. Check Policy Terms Endpoint (Anti-Rugpull)
+            # 1. Check Policy Terms Endpoint (Anti-Rugpull) & Validate Hash
             try:
                 t_res = gl.nondet.web.render(terms_str, mode="text")
                 t_text = str(t_res)
                 if any(err in t_text[:400].lower() for err in ["404 not found", "error 404", "not found"]):
                     return {"verdict": "ESCALATE", "confidence": 100, "reason": "Policy terms URL is 404; escrow held to protect farmer."}
+                
+                import hashlib
+                computed_hash = hashlib.sha256(t_text.encode('utf-8')).hexdigest()
+                if computed_hash != expected_hash:
+                    return {
+                        "verdict": "ESCALATE",
+                        "confidence": 100,
+                        "reason": f"Policy terms hash mismatch! Expected {expected_hash}, got {computed_hash}. Terms modified post-underwriting."
+                    }
             except Exception as e:
-                return {"verdict": "ESCALATE", "confidence": 100, "reason": f"Terms fetch failed: {str(e)}"}
+                return {"verdict": "ESCALATE", "confidence": 100, "reason": f"Terms fetch/validation failed: {str(e)}"}
 
             # 2. Check Satellite Telemetry Endpoint
             try:
@@ -192,16 +207,23 @@ Respond ONLY with valid JSON:
 
         def validator_fn(leader_res) -> bool:
             """Consensus verification across validator nodes comparing deterministic effective verdicts."""
-            if not isinstance(leader_res, gl.vm.Return):
+            try:
+                leader_data = leader_res
+                if hasattr(leader_res, "calldata"):
+                    leader_data = leader_res.calldata
+                if not isinstance(leader_data, dict):
+                    leader_data = self._parse_llm_json(str(leader_data))
+
+                leader_verdict = self._effective_verdict(leader_data)
+
+                mine_data = leader_fn()
+                mine_verdict = self._effective_verdict(mine_data)
+                return leader_verdict == mine_verdict
+            except Exception:
                 return False
-            leader_data = leader_res.calldata if hasattr(leader_res, "calldata") else leader_res
-            if not isinstance(leader_data, dict):
-                leader_data = self._parse_llm_json(str(leader_data))
 
-            mine_data = leader_fn()
-            return self._effective_verdict(leader_data) == self._effective_verdict(mine_data)
-
-        result = gl.vm.run_nondet(leader_fn, validator_fn)
+        # Note: We move to run_nondet_unsafe as recommended by the reviewer for explicit validator error-handling.
+        result = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
         if not isinstance(result, dict):
             result = self._parse_llm_json(str(result))
 
@@ -215,6 +237,9 @@ Respond ONLY with valid JSON:
         if conf < 65:
             reason = f"[Confidence {conf}% < 65%] " + reason
 
+        # Note: The final_verdict is the consensus-authoritative field validated across nodes.
+        # The reason and confidence fields are proposed by the leader node to provide diagnostic context 
+        # and are not strictly compared for identity during consensus due to non-deterministic LLM variation.
         policy.verdict = final_verdict
         policy.reason = reason
         policy.confidence = bigint(conf)
@@ -351,6 +376,7 @@ Respond ONLY with valid JSON:
                     "coverage_amount": str(p.coverage_amount),
                     "status": p.status,
                     "terms_url": p.terms_url,
+                    "terms_hash": p.terms_hash,
                     "telemetry_url": p.telemetry_url,
                     "geo_coordinates": p.geo_coordinates,
                     "drought_index_trigger": p.drought_index_trigger,

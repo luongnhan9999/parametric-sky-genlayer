@@ -84,8 +84,8 @@ Open your browser to `http://localhost:5173`.
 
 ## 🔗 Live App & Deployed Contract
 * **Live App:** https://parametric-sky-genlayer.vercel.app
-* **Deployed Contract:** `0x5f1D854944C7B76c0fFb9fd4258F48F25A563B25`
-* **Explorer Link:** https://genlayer-explorer.vercel.app/address/0x5f1D854944C7B76c0fFb9fd4258F48F25A563B25
+* **Deployed Contract:** `0x547F9a87986a1af070077a551dDe3a247D275c02`
+* **Explorer Link:** https://explorer-studio.genlayer.com/address/0x547F9a87986a1af070077a551dDe3a247D275c02
 
 ---
 

@@ -28,6 +28,7 @@ interface Policy {
   coverage_amount: string;
   status: string; // ACTIVE, EVALUATING, AWAITING_PAYOUT, DISPUTED, ESCALATED, CLOSED
   terms_url: string;
+  terms_hash: string;
   telemetry_url: string;
   geo_coordinates: string;
   drought_index_trigger: string;
@@ -48,7 +49,7 @@ export default function App() {
   const [showUnderwriteModal, setShowUnderwriteModal] = useState(false);
 
   // App settings - Deployed Contract Address
-  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS || "0x5f1D854944C7B76c0fFb9fd4258F48F25A563B25";
+  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS || "0x547F9a87986a1af070077a551dDe3a247D275c02";
   
   // Real GenLayer state
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -84,9 +85,11 @@ export default function App() {
   const [newPolicy, setNewPolicy] = useState({
     id: "policy_" + Math.random().toString(36).substring(2, 8),
     insured: "",
-    termsUrl: "https://parametric.io/terms/rice_irrigation_2026.json",
+    termsUrl: "https://raw.githubusercontent.com/luongnhan9999/parametric-sky-genlayer/main/README.md",
+    termsHash: "5f8a614833ce8bb29094171a49a74cf0e15e3b8a1c8b36c84c171e21b79ea93e", // Default SHA-256 hash of README
+    telemetryUrl: "https://api.open-meteo.com/v1/forecast?latitude=19.8067&longitude=105.7851&current=temperature_2m,relative_humidity_2m,rain",
     geoCoords: "19.8067 N, 105.7851 E",
-    droughtTrigger: "NDVI < 0.25 for 14 days OR Rainfall < 10mm",
+    droughtTrigger: "NDVI < 0.25 for 14 days OR Temperature > 30 C",
     coverageAmount: "3000"
   });
 
@@ -97,7 +100,8 @@ export default function App() {
   useEffect(() => {
     const latStr = pinnedCoords.lat.toFixed(4);
     const lngStr = pinnedCoords.lng.toFixed(4);
-    setSatelliteTelemetryUrl(`https://satellite-feed.copernicus.eu/telemetry_${latStr.replace(".", "")}_${lngStr.replace(".", "")}.json`);
+    const apiTelemetryUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latStr}&longitude=${lngStr}&current=temperature_2m,relative_humidity_2m,rain`;
+    setSatelliteTelemetryUrl(apiTelemetryUrl);
     
     // Choose weather station based on nearest region
     if (pinnedCoords.lat > 18) {
@@ -110,7 +114,8 @@ export default function App() {
 
     setNewPolicy(prev => ({
       ...prev,
-      geoCoords: `${latStr} N, ${lngStr} E`
+      geoCoords: `${latStr} N, ${lngStr} E`,
+      telemetryUrl: apiTelemetryUrl
     }));
   }, [pinnedCoords]);
 
@@ -323,6 +328,8 @@ export default function App() {
           newPolicy.id,
           newPolicy.insured,
           newPolicy.termsUrl,
+          newPolicy.termsHash,
+          newPolicy.telemetryUrl,
           newPolicy.geoCoords,
           newPolicy.droughtTrigger
         ],
@@ -330,7 +337,10 @@ export default function App() {
       });
 
       setTxMessage("Waiting for GenLayer block finalization...");
-      await client.waitForTransactionReceipt({ hash });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
+        throw new Error(`Transaction reverted: ${receipt.txExecutionResultName}`);
+      }
       await loadRealPolicies();
       setShowUnderwriteModal(false);
       setActiveTab("policies");
@@ -367,12 +377,15 @@ export default function App() {
       const hash = await client.writeContract({
         address: contractAddress as `0x${string}`,
         functionName: "trigger_claim_assessment",
-        args: [policyId, satelliteTelemetryUrl],
+        args: [policyId],
         value: 0n
       });
 
       setTxMessage("Finalizing assessment and recording on-chain verdict...");
-      await client.waitForTransactionReceipt({ hash });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
+        throw new Error(`Assessment failed: ${receipt.txExecutionResultName}`);
+      }
       
       clearInterval(loggingTimer);
       setPipelineStep(4);
@@ -419,7 +432,10 @@ export default function App() {
         value: 0n
       });
 
-      await client.waitForTransactionReceipt({ hash });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
+        throw new Error(`Dispute failed: ${receipt.txExecutionResultName}`);
+      }
       await loadRealPolicies();
       setShowDisputeInput(null);
       setDisputeReason("");
@@ -455,7 +471,10 @@ export default function App() {
         value: 0n
       });
 
-      await client.waitForTransactionReceipt({ hash });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
+        throw new Error(`Settlement finalization failed: ${receipt.txExecutionResultName}`);
+      }
       await loadRealPolicies();
     } catch (err: any) {
       alert("Settlement Finalization Failed: " + (err.message || err));
@@ -489,7 +508,10 @@ export default function App() {
         value: 0n
       });
 
-      await client.waitForTransactionReceipt({ hash });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
+        throw new Error(`Arbitration settlement failed: ${receipt.txExecutionResultName}`);
+      }
       await loadRealPolicies();
       setShowEscalateInput(null);
     } catch (err: any) {
@@ -809,7 +831,7 @@ export default function App() {
                     <div className="flex items-center gap-2">
                       <Activity className="w-5 h-5 text-[#EAB308]" />
                       <h2 className="font-bold text-white tracking-wide uppercase text-sm">
-                        NDVI Multi-Spectrum Spectral Curve Chart
+                        NDVI Spectral Curve (Visual Simulation)
                       </h2>
                     </div>
                     <div className="flex items-center gap-4 text-xs font-mono">
@@ -899,6 +921,10 @@ export default function App() {
                       <div>NDVI 0.5</div>
                       <div>NDVI 0.25 [THRESHOLD]</div>
                       <div>NDVI 0.1</div>
+                    </div>
+
+                    <div className="absolute right-2 top-2 text-[8px] text-gray-600 font-mono">
+                      * Simulated historic telemetry trend for {pinnedCoords.label} coordinates
                     </div>
                     
                     <div className="absolute bottom-1 right-2 text-[9px] text-gray-500 font-mono flex justify-between w-[95%]">
@@ -1017,13 +1043,18 @@ export default function App() {
 
                   <div className="mt-4 pt-4 border-t border-[#38BDF8]/10 flex flex-col justify-end">
                     {pipelineStep >= 0 && (
-                      <div className="bg-black/90 border border-[#38BDF8]/20 p-2.5 rounded h-[120px] overflow-y-auto text-[10px] font-mono text-green-500 space-y-1 mb-4 flex flex-col-reverse">
-                        {[...pipelineLogs].reverse().map((log, idx) => (
-                          <div key={idx} className="leading-relaxed">
-                            &gt; {log}
-                          </div>
-                        ))}
-                      </div>
+                      <>
+                        <span className="text-[9px] text-[#38BDF8] uppercase tracking-wider block mb-1">
+                          ⚡ Consensus Diagnostics Representation (Validator Simulation)
+                        </span>
+                        <div className="bg-black/90 border border-[#38BDF8]/20 p-2.5 rounded h-[120px] overflow-y-auto text-[10px] font-mono text-green-500 space-y-1 mb-4 flex flex-col-reverse">
+                          {[...pipelineLogs].reverse().map((log, idx) => (
+                            <div key={idx} className="leading-relaxed">
+                              &gt; {log}
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     )}
 
                     {currentPolicy ? (() => {
@@ -1479,8 +1510,10 @@ export default function App() {
                 ParametricSky represents a paradigm shift in climate risk management. 
                 By combining space observations with decentralized ledgers, we eliminate local human bias, 
                 inspection fraud, and delayed payment files. Underwriters deploy liquid coverage capital 
-                locked securely in smart contract escrow, which is instantly and trustlessly distributed 
-                to cooperative farmers when satellite data confirms drought occurrences.
+                locked securely in smart contract escrow, which is autonomously distributed 
+                to cooperative farmers when satellite data confirms drought occurrences. Normal payout paths 
+                are fully algorithmic via AI Consensus; however, a platform administrator backstop exists to 
+                resolve disputed claims or oracle failures.
               </p>
             </div>
 
@@ -1505,8 +1538,9 @@ export default function App() {
               <p className="leading-relaxed text-[11px] mb-3">
                 All decisions are subject to a 24-hour cooling-off window. This timeframe allows underwriters 
                 and farmers to review claims and submit sensory disputes when anomalies occur. All final 
-                escrow payouts are distributed immediately on-chain upon countdown completion, completing 
-                a fully autonomous and secure agricultural hedge.
+                escrow payouts are distributed immediately on-chain upon countdown completion. In the event of 
+                a persistent dispute or contract escalation, the platform administrator acts as a central arbitrator 
+                to resolve the deadlock and split/refund funds securely.
               </p>
               <div className="flex flex-wrap gap-2 text-[10px] pt-1">
                 <a href="https://studio.genlayer.com/api" target="_blank" rel="noopener noreferrer" className="text-[#38BDF8] hover:underline">Studionet Endpoint</a>
@@ -1597,6 +1631,28 @@ export default function App() {
                 required
                 value={newPolicy.termsUrl} 
                 onChange={(e) => setNewPolicy(p => ({ ...p, termsUrl: e.target.value }))}
+                className="w-full bg-[#0E151D] border border-[#38BDF8]/20 p-2 text-white outline-none rounded focus:border-[#38BDF8]"
+              />
+            </div>
+
+            <div>
+              <label className="text-gray-400 block mb-1">POLICY TERMS CRYPTOGRAPHIC HASH (SHA-256):</label>
+              <input 
+                type="text" 
+                required
+                value={newPolicy.termsHash} 
+                onChange={(e) => setNewPolicy(p => ({ ...p, termsHash: e.target.value }))}
+                className="w-full bg-[#0E151D] border border-[#38BDF8]/20 p-2 text-white outline-none rounded focus:border-[#38BDF8]"
+              />
+            </div>
+
+            <div>
+              <label className="text-gray-400 block mb-1">AUTHORITATIVE WEATHER TELEMETRY URL (LOCKED):</label>
+              <input 
+                type="text" 
+                required
+                value={newPolicy.telemetryUrl} 
+                onChange={(e) => setNewPolicy(p => ({ ...p, telemetryUrl: e.target.value }))}
                 className="w-full bg-[#0E151D] border border-[#38BDF8]/20 p-2 text-white outline-none rounded focus:border-[#38BDF8]"
               />
             </div>

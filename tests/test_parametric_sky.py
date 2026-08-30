@@ -53,6 +53,14 @@ class MockGL:
                 raise MockUserError("Consensus Disagreement")
             return res
 
+        @staticmethod
+        def run_nondet_unsafe(leader_fn, validator_fn):
+            res = leader_fn()
+            ret = MockReturn(calldata=res)
+            if not validator_fn(ret):
+                raise MockUserError("Consensus Disagreement")
+            return res
+
     def __init__(self):
         self.transfers = []
         self.message_raw = {"datetime": "2026-08-24T00:00:00+00:00"}
@@ -95,10 +103,25 @@ class TestParametricSkyExecutionSuite(unittest.TestCase):
         self.pid = "policy_thanh_hoa_rice_01"
         self.gl.message.sender_address = self.underwriter
         self.gl.message.value = MockBigInt(5000)
+
+        import hashlib
+        self.terms_text = "Satellite telemetry data: NDVI=0.18 for 18 days, rainfall=5mm"
+        self.terms_hash = hashlib.sha256(self.terms_text.encode('utf-8')).hexdigest()
+        self.telemetry_text = "Satellite telemetry data: NDVI=0.18 for 18 days, rainfall=5mm"
+
+        # Mock web.render to dynamically distinguish between terms and telemetry URL requests
+        def mock_web_render(url, mode="text"):
+            if "terms" in url or "drought_rice" in url:
+                return self.terms_text
+            return self.telemetry_text
+        self.gl.nondet.web.render = mock_web_render
+
         self.contract.underwrite_policy(
             self.pid,
             self.farmer,
             "https://parametric.io/terms/drought_rice_2026.json",
+            self.terms_hash,
+            "https://satellite-feed.copernicus.eu/telemetry_198067_1057851.json",
             "19.8067 N, 105.7851 E",
             "NDVI < 0.25 for 14 consecutive days OR Cumulative rainfall < 15mm"
         )
@@ -106,12 +129,12 @@ class TestParametricSkyExecutionSuite(unittest.TestCase):
     def test_01_severe_drought_full_payout(self):
         """Telemetry confirms severe drought -> Full 5000 GEN coverage paid to farmer after 24h."""
         self.gl.message.sender_address = self.farmer
-        self.gl.nondet.web.render = lambda url, mode="text": "Satellite telemetry data: NDVI=0.18 for 18 days, rainfall=5mm"
+        self.telemetry_text = "Satellite telemetry data: NDVI=0.18 for 18 days, rainfall=5mm"
         self.gl.nondet.exec_prompt = lambda p, response_format="json": {
             "verdict": "FULL_PAYOUT", "confidence": 98, "reason": "Severe vegetation collapse detected"
         }
 
-        self.contract.trigger_claim_assessment(self.pid, "https://satellite-feed.copernicus.eu/telemetry_198067_1057851.json")
+        self.contract.trigger_claim_assessment(self.pid)
         self.assertEqual(self.contract.policies[self.pid].status, "AWAITING_PAYOUT")
 
         # Settlement after 24h window
@@ -124,9 +147,9 @@ class TestParametricSkyExecutionSuite(unittest.TestCase):
     def test_02_dispute_blocks_settlement_and_allows_arbitration(self):
         """Underwriter disputes parametric calculation -> blocks payout until admin arbitrates."""
         self.gl.message.sender_address = self.farmer
-        self.gl.nondet.web.render = lambda url, mode="text": "Moderate drought"
+        self.telemetry_text = "Moderate drought"
         self.gl.nondet.exec_prompt = lambda p, response_format="json": {"verdict": "FULL_PAYOUT", "confidence": 90, "reason": "Drought"}
-        self.contract.trigger_claim_assessment(self.pid, "https://satellite.org/data.json")
+        self.contract.trigger_claim_assessment(self.pid)
 
         # Underwriter disputes at T+10h
         self.gl.message_raw = {"datetime": "2026-08-24T10:00:00+00:00"}
@@ -155,13 +178,13 @@ class TestParametricSkyExecutionSuite(unittest.TestCase):
         # 1. Underwriter attempts to trigger assessment -> should fail
         self.gl.message.sender_address = self.underwriter
         with self.assertRaises(MockUserError):
-            self.contract.trigger_claim_assessment(self.pid, "https://satellite.org/data.json")
+            self.contract.trigger_claim_assessment(self.pid)
 
         # 2. Farmer triggers assessment -> should succeed
         self.gl.message.sender_address = self.farmer
-        self.gl.nondet.web.render = lambda url, mode="text": "Severe drought"
+        self.telemetry_text = "Severe drought"
         self.gl.nondet.exec_prompt = lambda p, response_format="json": {"verdict": "FULL_PAYOUT", "confidence": 95, "reason": "Drought"}
-        self.contract.trigger_claim_assessment(self.pid, "https://satellite.org/data.json")
+        self.contract.trigger_claim_assessment(self.pid)
         self.assertEqual(self.contract.policies[self.pid].status, "AWAITING_PAYOUT")
 
         # 3. Farmer attempts to dispute payout verdict -> should fail (since payout favors farmer)
