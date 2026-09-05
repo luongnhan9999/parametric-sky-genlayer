@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { TransactionStatus, ExecutionResult } from "genlayer-js/types";
 import { 
   Shield, 
   MapPin, 
@@ -86,7 +87,7 @@ export default function App() {
     id: "policy_" + Math.random().toString(36).substring(2, 8),
     insured: "",
     termsUrl: "https://raw.githubusercontent.com/luongnhan9999/parametric-sky-genlayer/main/README.md",
-    termsHash: "522ab4262cc4f4c90bb8a18b8597927b53d2bd141c6d19e9c97dfc7225c3f3bd", // Default SHA-256 hash of README
+    termsHash: "671ecd1c502bf27a33010c626c53ae92fdcaa61b452c0dd9a6de518692484d16", // Default SHA-256 hash of README
     telemetryUrl: "https://api.open-meteo.com/v1/forecast?latitude=19.8067&longitude=105.7851&current=temperature_2m,relative_humidity_2m,rain",
     geoCoords: "19.8067 N, 105.7851 E",
     droughtTrigger: "NDVI < 0.25 for 14 days OR Temperature > 30 C",
@@ -278,7 +279,7 @@ export default function App() {
       "[Consensus Automated Payout] Executing leader node execution program on GenLayer VM...",
       "[Consensus Automated Payout] Generating AI Verdict based on terms and satellite parameters...",
       "[Consensus Automated Payout] Broadcasting Leader result to Validator nodes...",
-      "[Consensus Automated Payout] GenLayer AI Consensus: 4/4 Validator nodes verified. Settlement payload locked."
+      "[Consensus] Awaiting GenLayer VM consensus finalization... (this may take 30-60 seconds)"
     ];
 
     let currentLogIndex = 0;
@@ -337,9 +338,12 @@ export default function App() {
       });
 
       setTxMessage("Waiting for GenLayer block finalization...");
-      const receipt = await client.waitForTransactionReceipt({ hash });
-      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
-        throw new Error(`Transaction reverted: ${receipt.txExecutionResultName}`);
+      const receipt: any = await client.waitForTransactionReceipt({
+        hash,
+        status: TransactionStatus.FINALIZED,
+      });
+      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+        throw new Error(`Transaction reverted: ${receipt.txExecutionResultName || "UNKNOWN"}`);
       }
       await loadRealPolicies();
       setShowUnderwriteModal(false);
@@ -382,9 +386,12 @@ export default function App() {
       });
 
       setTxMessage("Finalizing assessment and recording on-chain verdict...");
-      const receipt = await client.waitForTransactionReceipt({ hash });
-      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
-        throw new Error(`Assessment failed: ${receipt.txExecutionResultName}`);
+      const receipt: any = await client.waitForTransactionReceipt({
+        hash,
+        status: TransactionStatus.FINALIZED,
+      });
+      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+        throw new Error(`Assessment failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
       }
       
       clearInterval(loggingTimer);
@@ -432,9 +439,12 @@ export default function App() {
         value: 0n
       });
 
-      const receipt = await client.waitForTransactionReceipt({ hash });
-      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
-        throw new Error(`Dispute failed: ${receipt.txExecutionResultName}`);
+      const receipt: any = await client.waitForTransactionReceipt({
+        hash,
+        status: TransactionStatus.FINALIZED,
+      });
+      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+        throw new Error(`Dispute failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
       }
       await loadRealPolicies();
       setShowDisputeInput(null);
@@ -471,9 +481,12 @@ export default function App() {
         value: 0n
       });
 
-      const receipt = await client.waitForTransactionReceipt({ hash });
-      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
-        throw new Error(`Settlement finalization failed: ${receipt.txExecutionResultName}`);
+      const receipt: any = await client.waitForTransactionReceipt({
+        hash,
+        status: TransactionStatus.FINALIZED,
+      });
+      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+        throw new Error(`Settlement finalization failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
       }
       await loadRealPolicies();
     } catch (err: any) {
@@ -508,9 +521,12 @@ export default function App() {
         value: 0n
       });
 
-      const receipt = await client.waitForTransactionReceipt({ hash });
-      if (receipt.txExecutionResultName && receipt.txExecutionResultName !== "FINISHED_WITH_RETURN") {
-        throw new Error(`Arbitration settlement failed: ${receipt.txExecutionResultName}`);
+      const receipt: any = await client.waitForTransactionReceipt({
+        hash,
+        status: TransactionStatus.FINALIZED,
+      });
+      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+        throw new Error(`Arbitration settlement failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
       }
       await loadRealPolicies();
       setShowEscalateInput(null);
@@ -633,9 +649,9 @@ export default function App() {
                   </h2>
                   <p className="text-gray-300 text-sm leading-relaxed">
                     Welcome to **ParametricSky**, a decentralized protocol for autonomous crop drought insurance. 
-                    Traditional agricultural insurance suffers from human evaluation delays, administrative friction, and payout disputes. 
+                    Traditional agricultural insurance suffers from manual adjuster delays, administrative friction, and payout disputes. 
                     ParametricSky implements GenLayer Intelligent Contracts to lock underwriter capital, fetch raw satellite telemetry, 
-                    and run AI Consensus nodes directly on-chain to trigger automated payouts.
+                    and run AI Consensus nodes directly on-chain to trigger automated payouts under normal conditions, supported by a platform administrator arbitration backstop for dispute resolution.
                   </p>
 
                   <div className="flex flex-wrap gap-3 pt-2">
@@ -683,8 +699,10 @@ export default function App() {
 
                 <div className="bg-[#0F161E] border border-gray-800 rounded-xl p-5 flex items-center justify-between shadow-md">
                   <div>
-                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">AI Consensus Ratio</span>
-                    <span className="text-xl font-bold text-green-500 mt-1 block">4/4 Validators (100%)</span>
+                    <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider block">Policies Evaluated</span>
+                    <span className="text-xl font-bold text-green-500 mt-1 block">
+                      {policies.filter(p => p.verdict !== "NONE").length} / {policies.length}
+                    </span>
                   </div>
                   <Cpu className="w-8 h-8 text-green-500 opacity-60" />
                 </div>
@@ -1418,15 +1436,11 @@ export default function App() {
                                   </div>
                                   {p.confidence !== "0" && (
                                     <div className="flex items-center gap-4 text-slate-500 text-[9px] pt-1 border-t border-gray-900">
-                                      <span>Jury Node Consensus Agreement: 100% (4/4 Validators)</span>
+                                      <span>On-Chain Consensus Confidence: <strong className="text-green-400">{p.confidence}%</strong></span>
                                       <span>•</span>
-                                      <span>Voter 1 (Aeneas LLM): AGREE</span>
+                                      <span>Execution Status: <strong className="text-white">{p.status}</strong></span>
                                       <span>•</span>
-                                      <span>Voter 2 (Ithaca LLM): AGREE</span>
-                                      <span>•</span>
-                                      <span>Voter 3 (Adonis LLM): AGREE</span>
-                                      <span>•</span>
-                                      <span>Voter 4 (Minos LLM): AGREE</span>
+                                      <span>Consensus Verdict: <strong className="text-[#EAB308]">{p.verdict}</strong></span>
                                     </div>
                                   )}
                                 </div>
@@ -1459,13 +1473,13 @@ export default function App() {
                 </button>
               </div>
               <p className="leading-relaxed">
-                Parametric insurance solves traditional crop protection friction by deploying immutable smart contracts. Instead of waiting months for human assessors to audit fields and files, payouts are determined automatically by objective satellite and telemetry data.
+                Parametric insurance solves traditional crop protection friction by deploying immutable smart contracts. Instead of waiting months for traditional claim adjusters, the standard payout path is determined automatically by objective satellite and telemetry data. A platform administrator arbitration backstop is maintained strictly to resolve sensory disputes, telemetry feed failures, or contract escalations.
               </p>
 
               <div className="border border-[#EAB308]/20 bg-[#EAB308]/5 p-4 rounded-lg space-y-2">
-                <h3 className="font-bold text-[#EAB308] uppercase text-xs">GenLayer Intelligent Contracts</h3>
+                <h3 className="font-bold text-[#EAB308] uppercase text-xs">GenLayer Intelligent Contracts & Trust Architecture</h3>
                 <p className="leading-relaxed">
-                  GenLayer contracts support non-deterministic AI Consensus computation. In ParametricSky, this enables retrieving raw multi-spectral data on-chain using `gl.nondet.web.render`, calculating biological crop vegetative index stress (NDVI), and processing subjective meteorological evaluation via validator nodes to settle claims automatically without human intervention.
+                  GenLayer contracts support non-deterministic AI Consensus computation. In ParametricSky, this enables retrieving raw multi-spectral data on-chain using `gl.nondet.web.render`, calculating biological crop vegetative index stress (NDVI), and processing subjective meteorological evaluation via validator nodes to settle claims automatically under standard conditions. In the event of conflicting telemetry or participant disputes during the cooling-off window, a centralized platform administrator arbitration backstop resolves the deadlock to protect escrow integrity.
                 </p>
               </div>
 

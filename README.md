@@ -13,7 +13,7 @@ Traditional agricultural crop insurance contracts require manual, on-site damage
 ### 2. The GenLayer Solution
 * **Escrow Pools:** Underwriters lock the crop insurance coverage deposit inside the GenLayer Intelligent Contract.
 * **On-Chain Web Ingestion:** In the event of a drought, the contract queries open-source satellite telemetry (like Open-Meteo, NOAA/Copernicus Sentinel sensory data) using `gl.nondet.web.render` directly from the blockchain.
-* **AI Consensus Arbitration:** Multiple GenLayer validator nodes process the raw weather data, calculating the Normalized Difference Vegetation Index (NDVI) and continuous ground surface heat metrics. They run an on-chain LLM consensus prompt (`gl.vm.run_nondet`) to reach agreement on whether the parametric drought thresholds are met and automatically execute tiered payouts without human intermediaries.
+* **AI Consensus Arbitration:** Multiple GenLayer validator nodes process the raw weather data, calculating the Normalized Difference Vegetation Index (NDVI) and continuous ground surface heat metrics. They run an on-chain LLM consensus prompt (`gl.vm.run_nondet_unsafe`) to reach agreement on whether the parametric drought thresholds are met and automatically execute tiered payouts under normal conditions, supported by a platform administrator arbitration backstop for dispute resolution.
 
 ---
 
