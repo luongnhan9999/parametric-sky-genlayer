@@ -87,7 +87,7 @@ export default function App() {
     id: "policy_" + Math.random().toString(36).substring(2, 8),
     insured: "",
     termsUrl: "https://raw.githubusercontent.com/luongnhan9999/parametric-sky-genlayer/main/README.md",
-    termsHash: "671ecd1c502bf27a33010c626c53ae92fdcaa61b452c0dd9a6de518692484d16", // Default SHA-256 hash of README
+    termsHash: "c81385c236bbb900fd556e19adfe83550a522cc0694eabe7671faab2274e8b2e", // Default SHA-256 hash of README
     telemetryUrl: "https://api.open-meteo.com/v1/forecast?latitude=19.8067&longitude=105.7851&current=temperature_2m,relative_humidity_2m,rain",
     geoCoords: "19.8067 N, 105.7851 E",
     droughtTrigger: "NDVI < 0.25 for 14 days OR Temperature > 30 C",
@@ -341,9 +341,16 @@ export default function App() {
       const receipt: any = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.FINALIZED,
+        retries: 60,
+        interval: 2000,
       });
-      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-        throw new Error(`Transaction reverted: ${receipt.txExecutionResultName || "UNKNOWN"}`);
+      const isSuccess = 
+        receipt.txExecutionResultName === ExecutionResult.FINISHED_WITH_RETURN ||
+        receipt.txExecutionResultName === "FINISHED_WITH_RETURN" ||
+        (receipt.status_name === "FINALIZED" && receipt.result_name === "MAJORITY_AGREE") ||
+        (receipt.status === 7 && receipt.result_name === "MAJORITY_AGREE");
+      if (!isSuccess) {
+        throw new Error(`Transaction reverted: ${receipt.txExecutionResultName || receipt.result_name || "UNKNOWN"}`);
       }
       await loadRealPolicies();
       setShowUnderwriteModal(false);
@@ -389,9 +396,16 @@ export default function App() {
       const receipt: any = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.FINALIZED,
+        retries: 60,
+        interval: 2000,
       });
-      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-        throw new Error(`Assessment failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
+      const isSuccess = 
+        receipt.txExecutionResultName === ExecutionResult.FINISHED_WITH_RETURN ||
+        receipt.txExecutionResultName === "FINISHED_WITH_RETURN" ||
+        (receipt.status_name === "FINALIZED" && receipt.result_name === "MAJORITY_AGREE") ||
+        (receipt.status === 7 && receipt.result_name === "MAJORITY_AGREE");
+      if (!isSuccess) {
+        throw new Error(`Assessment failed: ${receipt.txExecutionResultName || receipt.result_name || "UNKNOWN"}`);
       }
       
       clearInterval(loggingTimer);
@@ -442,9 +456,16 @@ export default function App() {
       const receipt: any = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.FINALIZED,
+        retries: 60,
+        interval: 2000,
       });
-      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-        throw new Error(`Dispute failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
+      const isSuccess = 
+        receipt.txExecutionResultName === ExecutionResult.FINISHED_WITH_RETURN ||
+        receipt.txExecutionResultName === "FINISHED_WITH_RETURN" ||
+        (receipt.status_name === "FINALIZED" && receipt.result_name === "MAJORITY_AGREE") ||
+        (receipt.status === 7 && receipt.result_name === "MAJORITY_AGREE");
+      if (!isSuccess) {
+        throw new Error(`Dispute failed: ${receipt.txExecutionResultName || receipt.result_name || "UNKNOWN"}`);
       }
       await loadRealPolicies();
       setShowDisputeInput(null);
@@ -484,9 +505,16 @@ export default function App() {
       const receipt: any = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.FINALIZED,
+        retries: 60,
+        interval: 2000,
       });
-      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-        throw new Error(`Settlement finalization failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
+      const isSuccess = 
+        receipt.txExecutionResultName === ExecutionResult.FINISHED_WITH_RETURN ||
+        receipt.txExecutionResultName === "FINISHED_WITH_RETURN" ||
+        (receipt.status_name === "FINALIZED" && receipt.result_name === "MAJORITY_AGREE") ||
+        (receipt.status === 7 && receipt.result_name === "MAJORITY_AGREE");
+      if (!isSuccess) {
+        throw new Error(`Settlement finalization failed: ${receipt.txExecutionResultName || receipt.result_name || "UNKNOWN"}`);
       }
       await loadRealPolicies();
     } catch (err: any) {
@@ -524,9 +552,16 @@ export default function App() {
       const receipt: any = await client.waitForTransactionReceipt({
         hash,
         status: TransactionStatus.FINALIZED,
+        retries: 60,
+        interval: 2000,
       });
-      if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
-        throw new Error(`Arbitration settlement failed: ${receipt.txExecutionResultName || "UNKNOWN"}`);
+      const isSuccess = 
+        receipt.txExecutionResultName === ExecutionResult.FINISHED_WITH_RETURN ||
+        receipt.txExecutionResultName === "FINISHED_WITH_RETURN" ||
+        (receipt.status_name === "FINALIZED" && receipt.result_name === "MAJORITY_AGREE") ||
+        (receipt.status === 7 && receipt.result_name === "MAJORITY_AGREE");
+      if (!isSuccess) {
+        throw new Error(`Arbitration settlement failed: ${receipt.txExecutionResultName || receipt.result_name || "UNKNOWN"}`);
       }
       await loadRealPolicies();
       setShowEscalateInput(null);
